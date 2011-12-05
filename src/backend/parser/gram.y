@@ -496,7 +496,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
 	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLOSE
-	CLUSTER COALESCE COLLATE COLLATION COLUMN COMMENT COMMENTS COMMIT
+	CLUSTER COALESCE COLLATE COLLATION COLUMN COMBINE COMMENT COMMENTS COMMIT
 	COMMITTED CONCURRENTLY CONFIGURATION CONNECTION CONSTRAINT CONSTRAINTS
 	CONTENT_P CONTINUE_P CONVERSION_P COPY COST CREATE
 	CROSS CSV CURRENT_P
@@ -586,7 +586,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 /* Precedence: lowest to highest */
 %nonassoc	SET				/* see relation_expr_opt_alias */
-%left		UNION EXCEPT
+%left		UNION EXCEPT COMBINE
 %left		INTERSECT
 %left		OR
 %left		AND
@@ -8461,6 +8461,10 @@ simple_select:
 				{
 					$$ = makeSetOp(SETOP_UNION, $3, $1, $4);
 				}
+			| select_clause COMBINE opt_all select_clause
+				{
+					$$ = makeSetOp(SETOP_UNION, $3, $1, $4);
+				}
 			| select_clause INTERSECT opt_all select_clause
 				{
 					$$ = makeSetOp(SETOP_INTERSECT, $3, $1, $4);
@@ -12185,6 +12189,7 @@ reserved_keyword:
 			| COLLATE
 			| COLUMN
 			| CONSTRAINT
+                        | COMBINE
 			| CREATE
 			| CURRENT_CATALOG
 			| CURRENT_DATE
