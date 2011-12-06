@@ -77,6 +77,10 @@ static List *recurse_union_children(Node *setOp, PlannerInfo *root,
 static Plan *make_union_unique(SetOperationStmt *op, Plan *plan,
 				  PlannerInfo *root, double tuple_fraction,
 				  List **sortClauses);
+static Plan *make_combine(SetOperationStmt *op, Plan *plan,
+				  PlannerInfo *root, double tuple_fraction,
+				  List **sortClauses);
+
 static bool choose_hashed_setop(PlannerInfo *root, List *groupClauses,
 					Plan *input_plan,
 					double dNumGroups, double dNumOutputRows,
@@ -416,11 +420,11 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 					List *refnames_tlist,
 					List **sortClauses, double *pNumGroups)
 {
-        elog(WARNING," generate_union_plan %d",op->op); 
+
 	List	   *planlist;
 	List	   *tlist;
 	Plan	   *plan;
-
+        elog(WARNING," generate_union_plan %d",op->op); 
 	/*
 	 * If plain UNION, tell children to fetch all tuples.
 	 *
@@ -456,8 +460,7 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 	 * next plan level up.
 	 */
 	tlist = generate_append_tlist(op->colTypes, op->colCollations, false,
-								  planlist, refnames_tlist);
-	pglist_print2("Append list",tlist);
+								  planlist, refnames_tlist);	
 
 	/*
 	 * Append the child results together.
@@ -468,10 +471,15 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 	 * For UNION ALL, we just need the Append plan.  For UNION, need to add
 	 * node(s) to remove duplicates.
 	 */
+        if (op->op==SETOP_UNION) {
 	if (op->all)
 		*sortClauses = NIL;		/* result of UNION ALL is always unsorted */
 	else
 		plan = make_union_unique(op, plan, root, tuple_fraction, sortClauses);
+        } 
+        if (op->op==SETOP_COMBINE) {
+		plan = make_combine(op, plan, root, tuple_fraction, sortClauses);
+        }
 
 	/*
 	 * Estimate number of groups if caller wants it.  For now we just assume
@@ -756,6 +764,76 @@ make_union_unique(SetOperationStmt *op, Plan *plan,
 
 	return plan;
 }
+
+/*
+ * get_first_column
+ *
+ */
+static List *
+get_first_column(SetOperationStmt *op, List *targetlist)
+{
+	ListCell *lt;
+        TargetEntry *tle;  
+	foreach(lt, targetlist)
+	{
+		tle = (TargetEntry *) lfirst(lt);
+                 break;              
+ 
+	}
+	return list_make1(tle);
+}
+
+
+
+static Plan *
+make_combine(SetOperationStmt *op, Plan *plan,
+				  PlannerInfo *root, double tuple_fraction,
+				  List **sortClauses)
+{
+	List	   *groupList;
+	double		dNumGroups;
+	long		numGroups;
+
+	/* Identify the grouping semantics */
+	groupList = get_first_column(op, plan->targetlist);
+        pglist_print2("group", groupList);
+	/* punt if nothing to group on (can this happen?) */
+	if (groupList == NIL)
+	{
+		*sortClauses = NIL;
+		return plan;
+	}
+
+	/*
+	 * XXX for the moment, take the number of distinct groups as equal to the
+	 * total input size, ie, the worst case.  This is too conservative, but we
+	 * don't want to risk having the hashtable overrun memory; also, it's not
+	 * clear how to get a decent estimate of the true size.  One should note
+	 * as well the propensity of novices to write UNION rather than UNION ALL
+	 * even when they don't expect any duplicates...
+	 */
+	dNumGroups = plan->plan_rows;
+
+	/* Also convert to long int --- but 'ware overflow! */
+	numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
+
+	/* Hashed aggregate plan --- no sort needed */
+	plan = (Plan *) make_agg(root,
+				 plan->targetlist,
+				 NIL,
+				 AGG_HASHED,
+				 NULL,
+				 list_length(groupList),
+				 extract_grouping_cols(groupList,plan->targetlist),
+                                 extract_grouping_ops(groupList),
+				 numGroups,
+				 plan);
+	/* Hashed aggregation produces randomly-ordered results */
+	*sortClauses = NIL;
+       elog(WARNING, "dNumGroups %d numGroups %d",dNumGroups,numGroups);
+	return plan;
+}
+
 
 /*
  * choose_hashed_setop - should we use hashing for a set operation?
