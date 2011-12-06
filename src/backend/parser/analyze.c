@@ -1635,6 +1635,7 @@ transformSetOperationTree(ParseState *pstate, SelectStmt *stmt,
 		context = (stmt->op == SETOP_UNION ? "UNION" :
 				   (stmt->op == SETOP_INTERSECT ? "INTERSECT" :
 					"EXCEPT"));
+                context = (stmt->op == SETOP_COMBINE ? "COMBINE" :context); 
 
 		op->op = stmt->op;
 		op->all = stmt->all;

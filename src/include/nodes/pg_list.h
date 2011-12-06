@@ -252,6 +252,9 @@ extern void list_free_deep(List *list);
 extern List *list_copy(List *list);
 extern List *list_copy_tail(List *list, int nskip);
 
+
+void pglist_print(const char * name, List *l); 
+void pglist_print2(const char * name, List *l);
 /*
  * To ease migration to the new list API, a set of compatibility
  * macros are provided that reduce the impact of the list API changes

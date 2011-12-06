@@ -995,7 +995,8 @@ typedef enum SetOperation
 	SETOP_NONE = 0,
 	SETOP_UNION,
 	SETOP_INTERSECT,
-	SETOP_EXCEPT
+	SETOP_EXCEPT,
+        SETOP_COMBINE
 } SetOperation;
 
 typedef struct SelectStmt

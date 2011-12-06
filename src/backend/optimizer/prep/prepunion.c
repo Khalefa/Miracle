@@ -107,7 +107,7 @@ static Relids adjust_relid_set(Relids relids, Index oldrelid, Index newrelid);
 static List *adjust_inherited_tlist(List *tlist,
 					   AppendRelInfo *context);
 
-
+void pglist_print2(const char * name,List *l);
 /*
  * plan_set_operations
  *
@@ -269,9 +269,9 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 	{
 		SetOperationStmt *op = (SetOperationStmt *) setOp;
 		Plan	   *plan;
-
+                elog(WARNING, "op %d",op->op);
 		/* UNIONs are much different from INTERSECT/EXCEPT */
-		if (op->op == SETOP_UNION)
+		if ((op->op == SETOP_UNION)||(op->op == SETOP_COMBINE))
 			plan = generate_union_plan(op, root, tuple_fraction,
 									   refnames_tlist,
 									   sortClauses, pNumGroups);
@@ -416,6 +416,7 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 					List *refnames_tlist,
 					List **sortClauses, double *pNumGroups)
 {
+        elog(WARNING," generate_union_plan %d",op->op); 
 	List	   *planlist;
 	List	   *tlist;
 	Plan	   *plan;
@@ -456,6 +457,7 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 	 */
 	tlist = generate_append_tlist(op->colTypes, op->colCollations, false,
 								  planlist, refnames_tlist);
+	pglist_print2("Append list",tlist);
 
 	/*
 	 * Append the child results together.
