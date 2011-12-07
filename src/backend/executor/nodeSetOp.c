@@ -134,8 +134,11 @@ build_hash_table(SetOpState *setopstate)
 
 	Assert(node->strategy == SETOP_HASHED);
 	Assert(node->numGroups > 0);
-        elog(WARNING, "numCols %d", node->numCols);        
-	setopstate->hashtable = BuildTupleHashTable(1,
+
+        int num = node->numCols;
+        if (node->cmd == SETOPCMD_COMBINE) num = 1;
+        elog(WARNING, "numCols %d num %d", node->numCols, num); 
+	setopstate->hashtable = BuildTupleHashTable(num,
 												node->dupColIdx,
 												setopstate->eqfunctions,
 												setopstate->hashfunctions,
@@ -179,6 +182,9 @@ set_output_count(SetOpState *setopstate, SetOpStatePerGroup pergroup)
 				(pergroup->numLeft < pergroup->numRight) ?
 				0 : (pergroup->numLeft - pergroup->numRight);
 			break;
+		case SETOPCMD_COMBINE:
+				setopstate->numOutput = 1;
+			break;	
 		default:
 			elog(ERROR, "unrecognized set op: %d", (int) plannode->cmd);
 			break;
@@ -195,7 +201,7 @@ ExecSetOp(SetOpState *node)
 {
 	SetOp	   *plannode = (SetOp *) node->ps.plan;
 	TupleTableSlot *resultTupleSlot = node->ps.ps_ResultTupleSlot;
-
+	elog(WARNING, "Strategy %d = %d", plannode->strategy, SETOP_HASHED);
 	/*
 	 * If the previously-returned tuple needs to be returned more than once,
 	 * keep returning it.
@@ -345,7 +351,7 @@ setop_fill_hash_table(SetOpState *setopstate)
 	PlanState  *outerPlan;
 	int			firstFlag;
 	bool		in_first_rel;
-
+         
 	/*
 	 * get state info from node
 	 */
@@ -355,7 +361,8 @@ setop_fill_hash_table(SetOpState *setopstate)
 	Assert(firstFlag == 0 ||
 		   (firstFlag == 1 &&
 			(node->cmd == SETOPCMD_INTERSECT ||
-			 node->cmd == SETOPCMD_INTERSECT_ALL)));
+			 node->cmd == SETOPCMD_INTERSECT_ALL ||
+			 node->cmd == SETOPCMD_COMBINE  )));
 
 	/*
 	 * Process each outer-plan tuple, and then fetch the next one, until we
@@ -396,10 +403,19 @@ setop_fill_hash_table(SetOpState *setopstate)
 		{
 			/* reached second relation */
 			in_first_rel = false;
+			if (node->cmd == SETOPCMD_COMBINE) {
+				/* Find or build hashtable entry for this tuple's group */
+				entry = (SetOpHashEntry)
+					LookupTupleHashEntry(setopstate->hashtable, outerslot, &isnew);
 
-			/* For tuples not seen previously, do not make hashtable entry */
-			entry = (SetOpHashEntry)
-				LookupTupleHashEntry(setopstate->hashtable, outerslot, NULL);
+				/* If new tuple group, initialize counts */
+				if (isnew)
+					initialize_counts(&entry->pergroup);
+			} else {
+				/* For tuples not seen previously, do not make hashtable entry */
+				entry = (SetOpHashEntry)
+					LookupTupleHashEntry(setopstate->hashtable, outerslot, NULL);
+			}
 
 			/* Advance the counts if entry is already present */
 			if (entry)

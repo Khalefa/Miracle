@@ -599,9 +599,12 @@ generate_nonunion_plan(SetOperationStmt *op, PlannerInfo *root,
 	numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
 
 	/*
-	 * Decide whether to hash or sort, and add a sort node if needed.
+	 * Decide whether to hash or sort, and add a sort node if needed. For combine, set it to true
 	 */
-	use_hash = choose_hashed_setop(root, groupList, plan,
+        if (op->op == SETOP_COMBINE) 
+		use_hash=TRUE; 
+        else
+		use_hash = choose_hashed_setop(root, groupList, plan,
 								   dNumGroups, dNumOutputRows, tuple_fraction,
 					   (op->op == SETOP_INTERSECT) ? "INTERSECT" : "EXCEPT");
 
@@ -619,6 +622,10 @@ generate_nonunion_plan(SetOperationStmt *op, PlannerInfo *root,
 		case SETOP_EXCEPT:
 			cmd = op->all ? SETOPCMD_EXCEPT_ALL : SETOPCMD_EXCEPT;
 			break;
+		case SETOP_COMBINE:
+			cmd = SETOPCMD_COMBINE;
+			break;
+
 		default:
 			elog(ERROR, "unrecognized set op: %d", (int) op->op);
 			cmd = SETOPCMD_INTERSECT;	/* keep compiler quiet */
