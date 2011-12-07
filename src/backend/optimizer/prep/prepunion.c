@@ -275,7 +275,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		Plan	   *plan;
                 elog(WARNING, "op %d",op->op);
 		/* UNIONs are much different from INTERSECT/EXCEPT */
-		if ((op->op == SETOP_UNION)||(op->op == SETOP_COMBINE))
+		if (op->op == SETOP_UNION)
 			plan = generate_union_plan(op, root, tuple_fraction,
 									   refnames_tlist,
 									   sortClauses, pNumGroups);
@@ -478,6 +478,7 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 		plan = make_union_unique(op, plan, root, tuple_fraction, sortClauses);
         } 
         if (op->op==SETOP_COMBINE) {
+                Assert(1==0);
 		plan = make_combine(op, plan, root, tuple_fraction, sortClauses);
         }
 
@@ -493,7 +494,7 @@ generate_union_plan(SetOperationStmt *op, PlannerInfo *root,
 }
 
 /*
- * Generate plan for an INTERSECT, INTERSECT ALL, EXCEPT, or EXCEPT ALL node
+ * Generate plan for an INTERSECT, INTERSECT ALL, EXCEPT, or EXCEPT ALL node, or COMBINE
  */
 static Plan *
 generate_nonunion_plan(SetOperationStmt *op, PlannerInfo *root,
@@ -816,7 +817,7 @@ make_combine(SetOperationStmt *op, Plan *plan,
 
 	/* Also convert to long int --- but 'ware overflow! */
 	numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
-
+       elog(WARNING, "dNumGroups %d numGroups %d",dNumGroups,numGroups);
 	/* Hashed aggregate plan --- no sort needed */
 	plan = (Plan *) make_agg(root,
 				 plan->targetlist,
@@ -830,7 +831,7 @@ make_combine(SetOperationStmt *op, Plan *plan,
 				 plan);
 	/* Hashed aggregation produces randomly-ordered results */
 	*sortClauses = NIL;
-       elog(WARNING, "dNumGroups %d numGroups %d",dNumGroups,numGroups);
+
 	return plan;
 }
 

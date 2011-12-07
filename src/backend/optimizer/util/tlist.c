@@ -319,18 +319,19 @@ extract_grouping_ops(List *groupClause)
 	int			colno = 0;
 	Oid		   *groupOperators;
 	ListCell   *glitem;
-
+        
+        elog(WARNING, "numCols %d",numCols);
 	groupOperators = (Oid *) palloc(sizeof(Oid) * numCols);
 
 	foreach(glitem, groupClause)
 	{
 		SortGroupClause *groupcl = (SortGroupClause *) lfirst(glitem);
-
+                 elog(WARNING, " %d %d %d", groupcl->tleSortGroupRef,groupcl->eqop,groupcl->sortop);
 		groupOperators[colno] = groupcl->eqop;
 		Assert(OidIsValid(groupOperators[colno]));
 		colno++;
 	}
-
+        elog(WARNING, "done extract_grouping_ops");
 	return groupOperators;
 }
 
@@ -347,7 +348,7 @@ extract_grouping_cols(List *groupClause, List *tlist)
 	ListCell   *glitem;
 
 	grpColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numCols);
-
+        pglist_print2("tlist", tlist);
 	foreach(glitem, groupClause)
 	{
 		SortGroupClause *groupcl = (SortGroupClause *) lfirst(glitem);
@@ -355,7 +356,7 @@ extract_grouping_cols(List *groupClause, List *tlist)
 
 		grpColIdx[colno++] = tle->resno;
 	}
-
+        elog(WARNING, "done extract_grouping_cols");
 	return grpColIdx;
 }
 

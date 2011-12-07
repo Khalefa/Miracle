@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * nodeSetOp.c
- *	  Routines to handle INTERSECT and EXCEPT selection
+ *	  Routines to handle INTERSECT and EXCEPT and COMBINE selection
  *
  * The input of a SetOp node consists of tuples from two relations,
  * which have been combined into one dataset, with a junk attribute added
@@ -134,8 +134,8 @@ build_hash_table(SetOpState *setopstate)
 
 	Assert(node->strategy == SETOP_HASHED);
 	Assert(node->numGroups > 0);
-
-	setopstate->hashtable = BuildTupleHashTable(node->numCols,
+        elog(WARNING, "numCols %d", node->numCols);        
+	setopstate->hashtable = BuildTupleHashTable(1,
 												node->dupColIdx,
 												setopstate->eqfunctions,
 												setopstate->hashfunctions,

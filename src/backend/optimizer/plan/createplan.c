@@ -3851,6 +3851,8 @@ make_agg(PlannerInfo *root, List *tlist, List *qual,
 	Plan	   *plan = &node->plan;
 	Path		agg_path;		/* dummy for result of cost_agg */
 	QualCost	qual_cost;
+        
+        elog(WARNING,"make_agg");          
 
 	node->aggstrategy = aggstrategy;
 	node->numCols = numGroupCols;
