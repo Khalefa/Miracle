@@ -138,7 +138,7 @@ build_hash_table(SetOpState *setopstate)
 	num = node->numCols;
 
         if (node->cmd == SETOPCMD_COMBINE) num = 1;
-        elog(WARNING, "numCols %d num %d", node->numCols, num); 
+        //elog(WARNING, "numCols %d num %d", node->numCols, num); 
 	setopstate->hashtable = BuildTupleHashTable(num,
 												node->dupColIdx,
 												setopstate->eqfunctions,
@@ -202,7 +202,7 @@ ExecSetOp(SetOpState *node)
 {
 	SetOp	   *plannode = (SetOp *) node->ps.plan;
 	TupleTableSlot *resultTupleSlot = node->ps.ps_ResultTupleSlot;
-	elog(WARNING, "Strategy %d = %d", plannode->strategy, SETOP_HASHED);
+	//	elog(WARNING, "Strategy %d = %d", plannode->strategy, SETOP_HASHED);
 	/*
 	 * If the previously-returned tuple needs to be returned more than once,
 	 * keep returning it.
@@ -413,9 +413,7 @@ setop_fill_hash_table(SetOpState *setopstate)
 			if (node->cmd == SETOPCMD_COMBINE) {
 				natts=outerslot->tts_tupleDescriptor->natts;
 
-				//elog(WARNING,"Attrs %d ",natts);
 				slot_getallattrs(outerslot); 
-            			elog(WARNING, "Tuple %d %d", outerslot->tts_values[0],outerslot->tts_values[1]);
                  
 				/* Find or build hashtable entry for this tuple's group */
 				entry = (SetOpHashEntry)
@@ -429,19 +427,16 @@ setop_fill_hash_table(SetOpState *setopstate)
 						replValues[i] = outerslot->tts_values[i];
 						replIsnull[i] = outerslot->tts_isnull[i];
 						doReplace[i] = 1;
-                                                elog(WARNING, "%d %d %d %d",i, replValues[i],replIsnull[i],doReplace[i]);
 					}
 			
 					RemoveTupleHashEntry(setopstate->hashtable, outerslot);
-					elog(WARNING, "Remove Tuple Hash Entry");
-					ExecStoreMinimalTuple(entry->shared.firstTuple,
-										 outerslot,
-										 false);      
-					elog(WARNING, "ExecStoreMinimalTuple ");
-					slot_getallattrs(outerslot); 
-					replValues[1]=100;
-					doReplace[1] = 1;
-					elog(WARNING, "setting values ");
+					ExecStoreMinimalTuple(entry->shared.firstTuple,outerslot,false);
+
+					slot_getallattrs(outerslot);
+					for(i=1;i<natts;i++) {
+						replValues[i] += outerslot->tts_values[i];
+					}
+
 					nslot=MakeSingleTupleTableSlot(outerslot->tts_tupleDescriptor);
 
 					nslot=ExecStoreTuple(heap_modify_tuple(nslot,
@@ -450,12 +445,10 @@ setop_fill_hash_table(SetOpState *setopstate)
 							  replIsnull,
 							  doReplace), nslot, InvalidBuffer, false);
 
-					elog(WARNING, "heap modify tuple ");
 					slot_getallattrs(nslot); 
-        	    			elog(WARNING, "Tuple %d %d", nslot->tts_values[0],nslot->tts_values[1]);
-
 					LookupTupleHashEntry(setopstate->hashtable, nslot, &isnew);            
-					elog(WARNING, "isnew %d", isnew);
+				} else {
+					LookupTupleHashEntry(setopstate->hashtable, outerslot, &isnew);
 				}				
 				 
 			} else {

@@ -8459,12 +8459,12 @@ simple_select:
 				}
 			| select_clause UNION opt_all select_clause
 				{
-					elog(WARNING, "SETOP_UNION");
+					//elog(WARNING, "SETOP_UNION");
 					$$ = makeSetOp(SETOP_UNION, $3, $1, $4);
 				}
 			| select_clause COMBINE select_clause
 				{
-					elog(WARNING, "SETOP_COMBINE,");
+					//elog(WARNING, "SETOP_COMBINE,");
 					$$ = makeSetOp(SETOP_COMBINE, FALSE, $1, $3);
 				}
 			| select_clause INTERSECT opt_all select_clause
@@ -12620,7 +12620,7 @@ static Node *
 makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
 {
 	SelectStmt *n = makeNode(SelectStmt);
-        elog(WARNING, "Set %d",op); 
+        //elog(WARNING, "Set %d",op); 
 	n->op = op;        
 	n->all = all;
 	n->larg = (SelectStmt *) larg;
