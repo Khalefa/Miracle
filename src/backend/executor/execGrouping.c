@@ -411,6 +411,63 @@ LookupTupleHashEntry(TupleHashTable hashtable, TupleTableSlot *slot,
 	return entry;
 }
 
+TupleHashEntry
+RemoveTupleHashEntry(TupleHashTable hashtable, TupleTableSlot *slot)
+{
+	TupleHashEntry entry;
+	MemoryContext oldContext;
+	TupleHashTable saveCurHT;
+	TupleHashEntryData dummy;
+	bool		found;
+
+	/* If first time through, clone the input slot to make table slot */
+	if (hashtable->tableslot == NULL)
+	{
+		TupleDesc	tupdesc;
+
+		oldContext = MemoryContextSwitchTo(hashtable->tablecxt);
+
+		/*
+		 * We copy the input tuple descriptor just for safety --- we assume
+		 * all input tuples will have equivalent descriptors.
+		 */
+		tupdesc = CreateTupleDescCopy(slot->tts_tupleDescriptor);
+		hashtable->tableslot = MakeSingleTupleTableSlot(tupdesc);
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	/* Need to run the hash functions in short-lived context */
+	oldContext = MemoryContextSwitchTo(hashtable->tempcxt);
+
+	/*
+	 * Set up data needed by hash and match functions
+	 *
+	 * We save and restore CurTupleHashTable just in case someone manages to
+	 * invoke this code re-entrantly.
+	 */
+	hashtable->inputslot = slot;
+	hashtable->in_hash_funcs = hashtable->tab_hash_funcs;
+	hashtable->cur_eq_funcs = hashtable->tab_eq_funcs;
+
+	saveCurHT = CurTupleHashTable;
+	CurTupleHashTable = hashtable;
+
+	/* Search the hash table */
+	dummy.firstTuple = NULL;	/* flag to reference inputslot */
+	entry = (TupleHashEntry) hash_search(hashtable->hashtab,
+										 &dummy,
+										 HASH_REMOVE,
+										 &found);
+
+	
+
+	CurTupleHashTable = saveCurHT;
+
+	MemoryContextSwitchTo(oldContext);
+
+	return entry;
+}
+
 /*
  * Search for a hashtable entry matching the given tuple.  No entry is
  * created if there's not a match.  This is similar to the non-creating

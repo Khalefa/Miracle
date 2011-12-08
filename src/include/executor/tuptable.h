@@ -167,6 +167,7 @@ extern TupleTableSlot *ExecCopySlot(TupleTableSlot *dstslot,
 /* in access/common/heaptuple.c */
 extern Datum slot_getattr(TupleTableSlot *slot, int attnum, bool *isnull);
 extern void slot_getallattrs(TupleTableSlot *slot);
+extern int slot_getnattrs(TupleTableSlot *slot);
 extern void slot_getsomeattrs(TupleTableSlot *slot, int attnum);
 extern bool slot_attisnull(TupleTableSlot *slot, int attnum);
 

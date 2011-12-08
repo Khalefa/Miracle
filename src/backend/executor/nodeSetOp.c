@@ -130,12 +130,13 @@ fetch_tuple_flag(SetOpState *setopstate, TupleTableSlot *inputslot)
 static void
 build_hash_table(SetOpState *setopstate)
 {
+        int num;
 	SetOp	   *node = (SetOp *) setopstate->ps.plan;
 
 	Assert(node->strategy == SETOP_HASHED);
 	Assert(node->numGroups > 0);
+	num = node->numCols;
 
-        int num = node->numCols;
         if (node->cmd == SETOPCMD_COMBINE) num = 1;
         elog(WARNING, "numCols %d num %d", node->numCols, num); 
 	setopstate->hashtable = BuildTupleHashTable(num,
@@ -183,7 +184,7 @@ set_output_count(SetOpState *setopstate, SetOpStatePerGroup pergroup)
 				0 : (pergroup->numLeft - pergroup->numRight);
 			break;
 		case SETOPCMD_COMBINE:
-				setopstate->numOutput = 1;
+				setopstate->numOutput = 1; /* Important*/
 			break;	
 		default:
 			elog(ERROR, "unrecognized set op: %d", (int) plannode->cmd);
@@ -372,9 +373,15 @@ setop_fill_hash_table(SetOpState *setopstate)
 	for (;;)
 	{
 		TupleTableSlot *outerslot;
+		TupleTableSlot *nslot;
 		int			flag;
 		SetOpHashEntry entry;
 		bool		isnew;
+		Datum *replValues;
+		bool *replIsnull;
+		bool *doReplace;
+                int natts;
+		int i;
 
 		outerslot = ExecProcNode(outerPlan);
 		if (TupIsNull(outerslot))
@@ -404,22 +411,61 @@ setop_fill_hash_table(SetOpState *setopstate)
 			/* reached second relation */
 			in_first_rel = false;
 			if (node->cmd == SETOPCMD_COMBINE) {
+				natts=outerslot->tts_tupleDescriptor->natts;
+
+				//elog(WARNING,"Attrs %d ",natts);
+				slot_getallattrs(outerslot); 
+            			elog(WARNING, "Tuple %d %d", outerslot->tts_values[0],outerslot->tts_values[1]);
+                 
 				/* Find or build hashtable entry for this tuple's group */
 				entry = (SetOpHashEntry)
-					LookupTupleHashEntry(setopstate->hashtable, outerslot, &isnew);
+					LookupTupleHashEntry(setopstate->hashtable, outerslot, NULL);
 
-				/* If new tuple group, initialize counts */
-				if (isnew)
-					initialize_counts(&entry->pergroup);
+				if (entry) {
+					replValues = (Datum*) palloc(sizeof(Datum)*natts);
+					replIsnull = (bool*) palloc(sizeof(bool)*natts);
+					doReplace = (bool*) palloc(sizeof(bool)*natts);
+					for(i=0;i<natts;i++) {
+						replValues[i] = outerslot->tts_values[i];
+						replIsnull[i] = outerslot->tts_isnull[i];
+						doReplace[i] = 1;
+                                                elog(WARNING, "%d %d %d %d",i, replValues[i],replIsnull[i],doReplace[i]);
+					}
+			
+					RemoveTupleHashEntry(setopstate->hashtable, outerslot);
+					elog(WARNING, "Remove Tuple Hash Entry");
+					ExecStoreMinimalTuple(entry->shared.firstTuple,
+										 outerslot,
+										 false);      
+					elog(WARNING, "ExecStoreMinimalTuple ");
+					slot_getallattrs(outerslot); 
+					replValues[1]=100;
+					doReplace[1] = 1;
+					elog(WARNING, "setting values ");
+					nslot=MakeSingleTupleTableSlot(outerslot->tts_tupleDescriptor);
+
+					nslot=ExecStoreTuple(heap_modify_tuple(nslot,
+							  outerslot->tts_tupleDescriptor,
+							  replValues,
+							  replIsnull,
+							  doReplace), nslot, InvalidBuffer, false);
+
+					elog(WARNING, "heap modify tuple ");
+					slot_getallattrs(nslot); 
+        	    			elog(WARNING, "Tuple %d %d", nslot->tts_values[0],nslot->tts_values[1]);
+
+					LookupTupleHashEntry(setopstate->hashtable, nslot, &isnew);            
+					elog(WARNING, "isnew %d", isnew);
+				}				
+				 
 			} else {
 				/* For tuples not seen previously, do not make hashtable entry */
 				entry = (SetOpHashEntry)
 					LookupTupleHashEntry(setopstate->hashtable, outerslot, NULL);
+				/* Advance the counts if entry is already present */
+				if (entry)
+					advance_counts(&entry->pergroup, flag);
 			}
-
-			/* Advance the counts if entry is already present */
-			if (entry)
-				advance_counts(&entry->pergroup, flag);
 		}
 
 		/* Must reset temp context after each hashtable lookup */

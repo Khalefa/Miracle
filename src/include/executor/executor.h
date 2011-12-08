@@ -137,10 +137,14 @@ extern TupleHashTable BuildTupleHashTable(int numCols, AttrNumber *keyColIdx,
 extern TupleHashEntry LookupTupleHashEntry(TupleHashTable hashtable,
 					 TupleTableSlot *slot,
 					 bool *isnew);
+extern TupleHashEntry RemoveTupleHashEntry(TupleHashTable hashtable, TupleTableSlot *slot);
+
 extern TupleHashEntry FindTupleHashEntry(TupleHashTable hashtable,
 				   TupleTableSlot *slot,
 				   FmgrInfo *eqfunctions,
 				   FmgrInfo *hashfunctions);
+
+
 
 /*
  * prototypes from functions in execJunk.c
