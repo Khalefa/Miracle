@@ -158,7 +158,7 @@ static void
 set_output_count(SetOpState *setopstate, SetOpStatePerGroup pergroup)
 {
 	SetOp	   *plannode = (SetOp *) setopstate->ps.plan;
-
+	elog(WARNING, "fields  %d",plannode->all);
 	switch (plannode->cmd)
 	{
 		case SETOPCMD_INTERSECT:
@@ -380,7 +380,7 @@ setop_fill_hash_table(SetOpState *setopstate)
 		Datum *replValues;
 		bool *replIsnull;
 		bool *doReplace;
-                int natts;
+        int natts;
 		int i;
 
 		outerslot = ExecProcNode(outerPlan);
@@ -411,43 +411,68 @@ setop_fill_hash_table(SetOpState *setopstate)
 			/* reached second relation */
 			in_first_rel = false;
 			if (node->cmd == SETOPCMD_COMBINE) {
-				natts=outerslot->tts_tupleDescriptor->natts;
-
-				slot_getallattrs(outerslot); 
                  
 				/* Find or build hashtable entry for this tuple's group */
 				entry = (SetOpHashEntry)
-					LookupTupleHashEntry(setopstate->hashtable, outerslot, NULL);
+					LookupTupleHashEntry(setopstate->hashtable,
+							     outerslot,
+							     NULL);
 
+				/* Copy values from entry, if exists*/
 				if (entry) {
-					replValues = (Datum*) palloc(sizeof(Datum)*natts);
-					replIsnull = (bool*) palloc(sizeof(bool)*natts);
-					doReplace = (bool*) palloc(sizeof(bool)*natts);
-					for(i=0;i<natts;i++) {
-						replValues[i] = outerslot->tts_values[i];
-						replIsnull[i] = outerslot->tts_isnull[i];
-						doReplace[i] = 1;
-					}
-			
-					RemoveTupleHashEntry(setopstate->hashtable, outerslot);
-					ExecStoreMinimalTuple(entry->shared.firstTuple,outerslot,false);
+					switch (node->all) {
+					case 8:
+						RemoveTupleHashEntry(setopstate->hashtable, outerslot);
+						LookupTupleHashEntry(setopstate->hashtable,
+										     outerslot,
+										     &isnew);
 
-					slot_getallattrs(outerslot);
-					for(i=1;i<natts;i++) {
-						replValues[i] += outerslot->tts_values[i];
-					}
+						break;
+					case 16:
+						replValues = (Datum*) palloc(sizeof(Datum)*natts);
+						replIsnull = (bool*) palloc(sizeof(bool)*natts);
+						doReplace = (bool*) palloc(sizeof(bool)*natts);
 
-					nslot=MakeSingleTupleTableSlot(outerslot->tts_tupleDescriptor);
+						natts=outerslot->tts_tupleDescriptor->natts;
+						slot_getallattrs(outerslot); 
 
-					nslot=ExecStoreTuple(heap_modify_tuple(nslot,
-							  outerslot->tts_tupleDescriptor,
-							  replValues,
-							  replIsnull,
-							  doReplace), nslot, InvalidBuffer, false);
+						for(i=0;i<natts;i++) {
+							replValues[i] = outerslot->tts_values[i];
+							replIsnull[i] = outerslot->tts_isnull[i];
+							doReplace[i] = 1;
+						}
+				
+						RemoveTupleHashEntry(setopstate->hashtable, outerslot);
+						ExecStoreMinimalTuple(entry->shared.firstTuple,outerslot,false);
 
-					slot_getallattrs(nslot); 
-					LookupTupleHashEntry(setopstate->hashtable, nslot, &isnew);            
+						slot_getallattrs(outerslot);
+						for(i=1;i<natts;i++) {
+							replValues[i] += outerslot->tts_values[i];
+						}
+
+						nslot=MakeSingleTupleTableSlot(
+									outerslot->tts_tupleDescriptor);
+
+						nslot=ExecStoreTuple(heap_modify_tuple(nslot,
+															  outerslot->tts_tupleDescriptor,
+															  replValues,
+															  replIsnull,
+															  doReplace), 
+											nslot, InvalidBuffer, false);
+
+						slot_getallattrs(nslot); 
+						LookupTupleHashEntry(setopstate->hashtable,
+										     nslot,
+										     &isnew);
+					
+						free(replValues);
+						free(replIsnull);
+						free(doReplace);
+						break;
+					};				
+  
 				} else {
+					/* new entry that does not exists in the first relation */
 					LookupTupleHashEntry(setopstate->hashtable, outerslot, &isnew);
 				}				
 				 

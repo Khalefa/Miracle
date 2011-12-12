@@ -4094,7 +4094,7 @@ make_unique(Plan *lefttree, List *distinctList)
 SetOp *
 make_setop(SetOpCmd cmd, SetOpStrategy strategy, Plan *lefttree,
 		   List *distinctList, AttrNumber flagColIdx, int firstFlag,
-		   long numGroups, double outputRows)
+		   long numGroups, double outputRows, int all)
 {
 	SetOp	   *node = makeNode(SetOp);
 	Plan	   *plan = &node->plan;
@@ -4145,6 +4145,7 @@ make_setop(SetOpCmd cmd, SetOpStrategy strategy, Plan *lefttree,
 	node->flagColIdx = flagColIdx;
 	node->firstFlag = firstFlag;
 	node->numGroups = numGroups;
+	node->all = all;
 
 	return node;
 }

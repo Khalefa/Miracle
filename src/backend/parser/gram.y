@@ -130,7 +130,7 @@ static void insertSelectOptions(SelectStmt *stmt,
 								Node *limitOffset, Node *limitCount,
 								WithClause *withClause,
 								core_yyscan_t yyscanner);
-static Node *makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg);
+static Node *makeSetOp(SetOperation op, int all, Node *larg, Node *rarg);
 static Node *doNegate(Node *n, int location);
 static void doNegateFloat(Value *v);
 static Node *makeAArrayExpr(List *elements, int location);
@@ -232,7 +232,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 				simple_select values_clause
 
 %type <node>	alter_column_default opclass_item opclass_drop alter_using
-%type <ival>	add_drop opt_asc_desc opt_nulls_order
+%type <ival>	add_drop opt_asc_desc opt_nulls_order opt_combine
 
 %type <node>	alter_table_cmd alter_type_cmd opt_collate_clause
 %type <list>	alter_table_cmds alter_type_cmds
@@ -340,7 +340,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <node>	for_locking_item
 %type <list>	for_locking_clause opt_for_locking_clause for_locking_items
 %type <list>	locked_rels_list
-%type <boolean>	opt_all
+%type <ival>	opt_all
 
 %type <node>	join_outer join_qual
 %type <jtype>	join_type
@@ -357,7 +357,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 %type <boolean> copy_from
 
-%type <ival>	opt_column event cursor_options opt_hold opt_set_data
+%type <ival>	opt_column event cursor_options opt_hold opt_set_data 
 %type <objtype>	reindex_type drop_type comment_type security_label_type
 
 %type <node>	fetch_args limit_clause select_limit_value
@@ -525,7 +525,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 	JOIN
 
-	KEY
+	KEEP_FIRST KEEP_SECOND KEY
 
 	LABEL LANGUAGE LARGE_P LAST_P LC_COLLATE_P LC_CTYPE_P LEADING
 	LEAST LEFT LEVEL LIKE LIMIT LISTEN LOAD LOCAL LOCALTIME LOCALTIMESTAMP
@@ -8462,10 +8462,11 @@ simple_select:
 					//elog(WARNING, "SETOP_UNION");
 					$$ = makeSetOp(SETOP_UNION, $3, $1, $4);
 				}
-			| select_clause COMBINE select_clause
+			| select_clause COMBINE opt_combine select_clause 
 				{
-					//elog(WARNING, "SETOP_COMBINE,");
-					$$ = makeSetOp(SETOP_COMBINE, FALSE, $1, $3);
+                                   // elog(WARNING, "Combining option %d", $3);
+				$$ = makeSetOp(SETOP_COMBINE, $3, $1, $4);
+
 				}
 			| select_clause INTERSECT opt_all select_clause
 				{
@@ -8593,9 +8594,15 @@ opt_table:	TABLE									{}
 			| /*EMPTY*/								{}
 		;
 
-opt_all:	ALL										{ $$ = TRUE; }
-			| DISTINCT								{ $$ = FALSE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+opt_combine:	KEEP_FIRST									{ $$ = 4; }
+			| KEEP_SECOND								{ $$ = 8; }
+			| /*EMPTY*/								{ $$ = 16; }
+		;
+
+
+opt_all:	ALL										{ $$ = 1; }
+			| DISTINCT								{ $$ = 0; }
+			| /*EMPTY*/								{ $$ = 0; }
 		;
 
 /* We use (NIL) as a placeholder to indicate that all target expressions
@@ -12223,6 +12230,8 @@ reserved_keyword:
 			| LIMIT
 			| LOCALTIME
 			| LOCALTIMESTAMP
+			| KEEP_FIRST
+			| KEEP_SECOND			
 			| NOT
 			| NULL_P
 			| OFFSET
@@ -12616,11 +12625,11 @@ insertSelectOptions(SelectStmt *stmt,
 	}
 }
 
+
 static Node *
-makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
+makeSetOp(SetOperation op, int all, Node *larg, Node *rarg)
 {
 	SelectStmt *n = makeNode(SelectStmt);
-        //elog(WARNING, "Set %d",op); 
 	n->op = op;        
 	n->all = all;
 	n->larg = (SelectStmt *) larg;

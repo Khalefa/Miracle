@@ -686,6 +686,7 @@ typedef struct SetOp
 	AttrNumber	flagColIdx;		/* where is the flag column, if any */
 	int			firstFlag;		/* flag value for first input relation */
 	long		numGroups;		/* estimated number of groups in input */
+	int		all;
 } SetOp;
 
 /* ----------------

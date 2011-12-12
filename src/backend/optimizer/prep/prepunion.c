@@ -635,7 +635,7 @@ generate_nonunion_plan(SetOperationStmt *op, PlannerInfo *root,
 							   plan, groupList,
 							   list_length(op->colTypes) + 1,
 							   use_hash ? firstFlag : -1,
-							   numGroups, dNumOutputRows);
+							   numGroups, dNumOutputRows, op->all);
 
 	/* Result is sorted only if we're not hashing */
 	*sortClauses = use_hash ? NIL : groupList;

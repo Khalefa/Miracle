@@ -996,7 +996,9 @@ typedef enum SetOperation
 	SETOP_UNION,
 	SETOP_INTERSECT,
 	SETOP_EXCEPT,
-        SETOP_COMBINE
+        SETOP_COMBINE/*,
+        SETOP_KEEP_FIRST,
+        SETOP_KEEP_SECOND*/
 } SetOperation;
 
 typedef struct SelectStmt
@@ -1040,7 +1042,7 @@ typedef struct SelectStmt
 	 * These fields are used only in upper-level SelectStmts.
 	 */
 	SetOperation op;			/* type of set op */
-	bool		all;			/* ALL specified? */
+	int		all;			/* ALL specified? */
 	struct SelectStmt *larg;	/* left child */
 	struct SelectStmt *rarg;	/* right child */
 	/* Eventually add fields for CORRESPONDING spec here */
@@ -1070,7 +1072,7 @@ typedef struct SetOperationStmt
 {
 	NodeTag		type;
 	SetOperation op;			/* type of set op */
-	bool		all;			/* ALL specified? */
+	int 		all;			/* ALL specified? */
 	Node	   *larg;			/* left child */
 	Node	   *rarg;			/* right child */
 	/* Eventually add fields for CORRESPONDING spec here */

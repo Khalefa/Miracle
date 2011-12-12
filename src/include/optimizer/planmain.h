@@ -75,7 +75,7 @@ extern Limit *make_limit(Plan *lefttree, Node *limitOffset, Node *limitCount,
 		   int64 offset_est, int64 count_est);
 extern SetOp *make_setop(SetOpCmd cmd, SetOpStrategy strategy, Plan *lefttree,
 		   List *distinctList, AttrNumber flagColIdx, int firstFlag,
-		   long numGroups, double outputRows);
+		   long numGroups, double outputRows,int all);
 extern Result *make_result(PlannerInfo *root, List *tlist,
 			Node *resconstantqual, Plan *subplan);
 extern ModifyTable *make_modifytable(CmdType operation, bool canSetTag,
