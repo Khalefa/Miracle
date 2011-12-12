@@ -120,7 +120,6 @@ fetch_tuple_flag(SetOpState *setopstate, TupleTableSlot *inputslot)
 									  node->flagColIdx,
 									  &isNull));
 	Assert(!isNull);
-	Assert(flag == 0 || flag == 1);
 	return flag;
 }
 
@@ -137,8 +136,7 @@ build_hash_table(SetOpState *setopstate)
 	Assert(node->numGroups > 0);
 	num = node->numCols;
 
-        if (node->cmd == SETOPCMD_COMBINE) num = 1;
-        //elog(WARNING, "numCols %d num %d", node->numCols, num); 
+	if (node->cmd == SETOPCMD_COMBINE) num = 1;
 	setopstate->hashtable = BuildTupleHashTable(num,
 												node->dupColIdx,
 												setopstate->eqfunctions,
@@ -158,7 +156,6 @@ static void
 set_output_count(SetOpState *setopstate, SetOpStatePerGroup pergroup)
 {
 	SetOp	   *plannode = (SetOp *) setopstate->ps.plan;
-	elog(WARNING, "fields  %d",plannode->all);
 	switch (plannode->cmd)
 	{
 		case SETOPCMD_INTERSECT:
@@ -202,7 +199,6 @@ ExecSetOp(SetOpState *node)
 {
 	SetOp	   *plannode = (SetOp *) node->ps.plan;
 	TupleTableSlot *resultTupleSlot = node->ps.ps_ResultTupleSlot;
-	//	elog(WARNING, "Strategy %d = %d", plannode->strategy, SETOP_HASHED);
 	/*
 	 * If the previously-returned tuple needs to be returned more than once,
 	 * keep returning it.
@@ -429,12 +425,15 @@ setop_fill_hash_table(SetOpState *setopstate)
 
 						break;
 					case 16:
+						natts=outerslot->tts_tupleDescriptor->natts;
 						replValues = (Datum*) palloc(sizeof(Datum)*natts);
 						replIsnull = (bool*) palloc(sizeof(bool)*natts);
 						doReplace = (bool*) palloc(sizeof(bool)*natts);
 
-						natts=outerslot->tts_tupleDescriptor->natts;
 						slot_getallattrs(outerslot); 
+						/* elog(WARNING, "Outer slot %d %d %d ",outerslot->tts_values[0],
+															   outerslot->tts_values[1],
+															   outerslot->tts_values[2]);*/
 
 						for(i=0;i<natts;i++) {
 							replValues[i] = outerslot->tts_values[i];
@@ -444,14 +443,18 @@ setop_fill_hash_table(SetOpState *setopstate)
 				
 						RemoveTupleHashEntry(setopstate->hashtable, outerslot);
 						ExecStoreMinimalTuple(entry->shared.firstTuple,outerslot,false);
-
+						
 						slot_getallattrs(outerslot);
 						for(i=1;i<natts;i++) {
+							doReplace[i] = 1;
+			                if (i==node->flagColIdx-1) {
+								replValues[i] += 1;
+								continue;
+							}
 							replValues[i] += outerslot->tts_values[i];
 						}
 
-						nslot=MakeSingleTupleTableSlot(
-									outerslot->tts_tupleDescriptor);
+						nslot=MakeSingleTupleTableSlot(outerslot->tts_tupleDescriptor);
 
 						nslot=ExecStoreTuple(heap_modify_tuple(nslot,
 															  outerslot->tts_tupleDescriptor,
@@ -461,13 +464,15 @@ setop_fill_hash_table(SetOpState *setopstate)
 											nslot, InvalidBuffer, false);
 
 						slot_getallattrs(nslot); 
+						/*elog(WARNING, "nslot %d %d %d ",nslot->tts_values[0],
+							        				    nslot->tts_values[1],
+													    nslot->tts_values[2]);*/
 						LookupTupleHashEntry(setopstate->hashtable,
 										     nslot,
 										     &isnew);
-					
-						free(replValues);
-						free(replIsnull);
-						free(doReplace);
+						pfree(replValues);
+						pfree(replIsnull);
+						pfree(doReplace);
 						break;
 					};				
   
@@ -503,11 +508,18 @@ setop_retrieve_hash_table(SetOpState *setopstate)
 {
 	SetOpHashEntry entry;
 	TupleTableSlot *resultTupleSlot;
+	TupleTableSlot *nslot;
+	Datum *replValues;
+	bool *replIsnull;
+	bool *doReplace;
+	int natts;
+	int i;
 
 	/*
 	 * get state info from node
 	 */
 	resultTupleSlot = setopstate->ps.ps_ResultTupleSlot;
+    SetOp	   *plannode = (SetOp *) setopstate->ps.plan;
 
 	/*
 	 * We loop retrieving groups until we find one we should return
@@ -534,9 +546,47 @@ setop_retrieve_hash_table(SetOpState *setopstate)
 		if (setopstate->numOutput > 0)
 		{
 			setopstate->numOutput--;
-			return ExecStoreMinimalTuple(entry->shared.firstTuple,
+			ExecStoreMinimalTuple(entry->shared.firstTuple,
 										 resultTupleSlot,
 										 false);
+             if (plannode->all != 16)
+				return resultTupleSlot;
+			else {
+					
+				int flag= fetch_tuple_flag(setopstate, resultTupleSlot);
+				if (flag == 0)return resultTupleSlot;
+				if (flag == 1) return resultTupleSlot;
+				slot_getallattrs(resultTupleSlot);
+				natts=resultTupleSlot->tts_tupleDescriptor->natts;
+				replValues = (Datum*) palloc(sizeof(Datum)*natts);
+				replIsnull = (bool*) palloc(sizeof(bool)*natts);
+				doReplace = (bool*) palloc(sizeof(bool)*natts);
+
+				for(i=0;i<natts;i++) {
+					doReplace[i] = 1;
+					if (i==plannode->flagColIdx-1)
+						replValues[i] = 1;
+					else if (i==0)
+						replValues[i] = resultTupleSlot->tts_values[i];
+					else
+						replValues[i] = resultTupleSlot->tts_values[i]/flag;
+					replIsnull[i] = resultTupleSlot->tts_isnull[i];
+				}
+
+				nslot=MakeSingleTupleTableSlot(resultTupleSlot->tts_tupleDescriptor);
+    			nslot=ExecStoreTuple(heap_modify_tuple(nslot,
+															  resultTupleSlot->tts_tupleDescriptor,
+															  replValues,
+															  replIsnull,
+															  doReplace), 
+	  								nslot, InvalidBuffer, false);
+
+				pfree(replValues);
+				pfree(replIsnull);
+				pfree(doReplace);
+
+				return nslot;
+			}
 		}
 	}
 
