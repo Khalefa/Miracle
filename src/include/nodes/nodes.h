@@ -170,6 +170,9 @@ typedef enum NodeTag
 	T_JoinExpr,
 	T_FromExpr,
 	T_IntoClause,
+	T_ForecastExpr,
+	T_DecomposeExpr,
+	T_DisAggExpr,
 
 	/*
 	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
@@ -422,7 +425,37 @@ typedef enum NodeTag
 	T_WindowObjectData,			/* private in nodeWindowAgg.c */
 	T_TIDBitmap,				/* in nodes/tidbitmap.h */
 	T_InlineCodeBlock,			/* in nodes/parsenodes.h */
-	T_FdwRoutine				/* in foreign/fdwapi.h */
+	T_FdwRoutine,				/* in foreign/fdwapi.h */
+
+	T_CreateModelStmt,
+	T_AlgorithmClause,
+	T_AlgorithmParameter,
+	T_CreateModelGraphStmt,
+	T_DropModelGraphStmt,
+	T_CreateDisAggSchemeStmt,
+	T_CreateAggSchemeStmt,
+	T_FillModelGraphStmt,
+	T_ReestimateModelGraphModelsStmt,
+	T_PrintStmt,
+	T_StoreStmt,
+	T_RestoreStmt,
+	T_ModelTree,
+	T_TableNode,
+	T_ColumnNode,
+	T_ConditionNode,
+	T_Predicate,
+	T_JoinNode,
+	T_Connection,
+	T_ModelNode,
+	T_Condition,
+
+	/*
+	 * TAGS FOR MODELGRAPHNODES
+	 */
+	T_RootNode,
+	T_IndexNode,
+	T_AggNode
+
 } NodeTag;
 
 /*

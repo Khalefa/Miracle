@@ -64,7 +64,7 @@
 #include "utils/datetime.h"
 #include "utils/numeric.h"
 #include "utils/xml.h"
-
+#include "forecast/modelindex/modelnodes.h"
 
 /* Location tracking support --- simpler than bison's default */
 #define YYLLOC_DEFAULT(Current, Rhs, N) \
@@ -129,6 +129,7 @@ static void insertSelectOptions(SelectStmt *stmt,
 								List *sortClause, List *lockingClause,
 								Node *limitOffset, Node *limitCount,
 								WithClause *withClause,
+								Node *forecastClause, Node *disAggClause,
 								core_yyscan_t yyscanner);
 static Node *makeSetOp(SetOperation op, int all, Node *larg, Node *rarg);
 static Node *doNegate(Node *n, int location);
@@ -192,6 +193,8 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 	AccessPriv			*accesspriv;
 	InsertStmt			*istmt;
 	VariableSetStmt		*vsetstmt;
+	
+	GraphAttribute		*graphAttr;
 }
 
 %type <node>	stmt schema_stmt
@@ -223,10 +226,18 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		SecLabelStmt SelectStmt TransactionStmt TruncateStmt
 		UnlistenStmt UpdateStmt VacuumStmt
 		VariableResetStmt VariableSetStmt VariableShowStmt
-		ViewStmt CheckPointStmt CreateConversionStmt
-		DeallocateStmt PrepareStmt ExecuteStmt
+		ViewStmt CheckPointStmt CreateConversionStmt PrintStmt
+		DeallocateStmt PrepareStmt ExecuteStmt StoreStmt RestoreStmt
 		DropOwnedStmt ReassignOwnedStmt
 		AlterTSConfigurationStmt AlterTSDictionaryStmt
+
+%type <node>	CreateModelGraphStmt DropModelGraphStmt CreateDisAggSchemeStmt FillModelGraphStmt ReestimateModelGraphModelsStmt CreateModelStmt DisAggStmt
+
+%type <node>	AlgorithmClause algorithm_parameter
+%type <list>	algorithm_parameter_list algorithm_parameters
+
+%type <node>	forecast_clause opt_algorithm_clause opt_forecast_clause
+				opt_a_expr
 
 %type <node>	select_no_parens select_with_parens select_clause
 				simple_select values_clause
@@ -465,6 +476,14 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 				opt_frame_clause frame_extent frame_bound
 %type <str>		opt_existing_window_name
 
+%type <node>	opt_on_clause
+
+%type <list>	where_list 
+
+%type <list>	graphAttributeList correlationClause correlationList correlation
+%type <graphAttr> graphAttribute
+%type <value>	opt_key_clause
+%type <ival>	fill_method_clause opt_storage_clause opt_mergeclause
 
 /*
  * Non-keyword token types.  These are hard-wired into the "flex" lexer.
@@ -488,33 +507,34 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 /* ordinary key words in alphabetical order */
 %token <keyword> ABORT_P ABSOLUTE_P ACCESS ACTION ADD_P ADMIN AFTER
-	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS ASC
-	ASSERTION ASSIGNMENT ASYMMETRIC AT ATTRIBUTE AUTHORIZATION
+	AGGREGATE ALGORITHM ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS
+	ASC ASOF ASSERTION ASSIGNMENT ASYMMETRIC AT ATTRIBUTE ATTRIBUTES
+    AUTHORIZATION AVERAGE
 
 	BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
-	BOOLEAN_P BOTH BY
+	BOOLEAN_P BOTH BOTTOMUP BY
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
-	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLOSE
+	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CHOOSE CLASS CLOSE
 	CLUSTER COALESCE COLLATE COLLATION COLUMN COMBINE COMMENT COMMENTS COMMIT
 	COMMITTED CONCURRENTLY CONFIGURATION CONNECTION CONSTRAINT CONSTRAINTS
-	CONTENT_P CONTINUE_P CONVERSION_P COPY COST CREATE
+	CONTENT_P CONTINUE_P CONVERSION_P COPY CORRELATION COST CREATE
 	CROSS CSV CURRENT_P
 	CURRENT_CATALOG CURRENT_DATE CURRENT_ROLE CURRENT_SCHEMA
 	CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER CURSOR CYCLE
 
-	DATA_P DATABASE DAY_P DEALLOCATE DEC DECIMAL_P DECLARE DEFAULT DEFAULTS
+	DATA_P DATABASE DAY_P DEALLOCATE DEC DECIMAL_P DECLARE DECOMPOSE DEFAULT DEFAULTS
 	DEFERRABLE DEFERRED DEFINER DELETE_P DELIMITER DELIMITERS DESC
-	DICTIONARY DISABLE_P DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P DOUBLE_P DROP
+	DICTIONARY DISABLE_P DISAGGREGATE DISAGGSCHEME DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P DOUBLE_P DROP
 
 	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EXCEPT
 	EXCLUDE EXCLUDING EXCLUSIVE EXECUTE EXISTS EXPLAIN
 	EXTENSION EXTERNAL EXTRACT
 
-	FALSE_P FAMILY FETCH FIRST_P FLOAT_P FOLLOWING FOR FORCE FOREIGN FORWARD
+	FALSE_P FAMILY FETCH FILL FILLING FIRST_P FLOAT_P FOLLOWING FOR FORCE FORECAST FOREIGN FORWARD
 	FREEZE FROM FULL FUNCTION FUNCTIONS
 
-	GLOBAL GRANT GRANTED GREATEST GROUP_P
+	GLOBAL GRANT GRANTED GREATEST GREEDY GROUP_P
 
 	HANDLER HAVING HEADER_P HOLD HOUR_P
 
@@ -525,40 +545,40 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 	JOIN
 
-	KEEP_FIRST KEEP_SECOND KEY
+	KEEP_FIRST KEEP_SECOND KEY KEYS
 
 	LABEL LANGUAGE LARGE_P LAST_P LC_COLLATE_P LC_CTYPE_P LEADING
 	LEAST LEFT LEVEL LIKE LIMIT LISTEN LOAD LOCAL LOCALTIME LOCALTIMESTAMP
 	LOCATION LOCK_P
 
-	MAPPING MATCH MAXVALUE MINUTE_P MINVALUE MODE MONTH_P MOVE
+	MAPPING MATCH MAXVALUE METHOD MINUTE_P MINVALUE MODE MODEL MODELGRAPH MODELINDEX MONTH_P MOVE MULT
 
 	NAME_P NAMES NATIONAL NATURAL NCHAR NEXT NO NONE
 	NOT NOTHING NOTIFY NOTNULL NOWAIT NULL_P NULLIF
-	NULLS_P NUMERIC
+	NULLS_P NUMBER NUMERIC
 
 	OBJECT_P OF OFF OFFSET OIDS ON ONLY OPERATOR OPTION OPTIONS OR
 	ORDER OUT_P OUTER_P OVER OVERLAPS OVERLAY OWNED OWNER
 
-	PARSER PARTIAL PARTITION PASSING PASSWORD PLACING PLANS POSITION
+	PARAMETERS PARSER PARTIAL PARTITION PASSING PASSWORD PLACING PLANS POSITION
 	PRECEDING PRECISION PRESERVE PREPARE PREPARED PRIMARY
-	PRIOR PRIVILEGES PROCEDURAL PROCEDURE
+	PRINT PRIOR PRIVILEGES PROCEDURAL PROCEDURE
 
 	QUOTE
 
-	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF REFERENCES REINDEX
+	RANGE READ REAL REASSIGN RECHECK RECURSIVE REESTIMATE REF REFERENCES REINDEX
 	RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA
-	RESET RESTART RESTRICT RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK
+	RESET RESTART RESTORE RESTRICT RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK
 	ROW ROWS RULE
 
-	SAVEPOINT SCHEMA SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
+	SAVEPOINT SCHEMA SCROLL SEARCH SEASON SECOND_P SECURITY SELECT SEQUENCE SEQUENCES
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETOF SHARE
 	SHOW SIMILAR SIMPLE SMALLINT SOME STABLE STANDALONE_P START STATEMENT
-	STATISTICS STDIN STDOUT STORAGE STRICT_P STRIP_P SUBSTRING
+	STATISTICS STRATEGY STDIN STDOUT STORAGE STORE STRICT_P STRIP_P SUBSTRING
 	SYMMETRIC SYSID SYSTEM_P
 
 	TABLE TABLES TABLESPACE TEMP TEMPLATE TEMPORARY TEXT_P THEN TIME TIMESTAMP
-	TO TRAILING TRANSACTION TREAT TRIGGER TRIM TRUE_P
+	TO TOPDOWN TRAILING TRAINING_DATA TRANSACTION TREAT TRIGGER TRIM TRUE_P
 	TRUNCATE TRUSTED TYPE_P
 
 	UNBOUNDED UNCOMMITTED UNENCRYPTED UNION UNIQUE UNKNOWN UNLISTEN UNLOGGED
@@ -718,6 +738,9 @@ stmt :
 			| CreateForeignTableStmt
 			| CreateFunctionStmt
 			| CreateGroupStmt
+			| CreateModelGraphStmt
+			| DropModelGraphStmt
+			| CreateModelStmt
 			| CreateOpClassStmt
 			| CreateOpFamilyStmt
 			| AlterOpFamilyStmt
@@ -756,7 +779,9 @@ stmt :
 			| DropdbStmt
 			| ExecuteStmt
 			| ExplainStmt
+			| PrintStmt
 			| FetchStmt
+			| FillModelGraphStmt
 			| GrantStmt
 			| GrantRoleStmt
 			| IndexStmt
@@ -767,16 +792,19 @@ stmt :
 			| NotifyStmt
 			| PrepareStmt
 			| ReassignOwnedStmt
+			| ReestimateModelGraphModelsStmt
 			| ReindexStmt
 			| RemoveAggrStmt
 			| RemoveFuncStmt
 			| RemoveOperStmt
 			| RenameStmt
+			| RestoreStmt
 			| RevokeStmt
 			| RevokeRoleStmt
 			| RuleStmt
 			| SecLabelStmt
 			| SelectStmt
+			| StoreStmt
 			| TransactionStmt
 			| TruncateStmt
 			| UnlistenStmt
@@ -7849,6 +7877,86 @@ opt_name_list:
 
 /*****************************************************************************
  *
+ *		PRINT COMMAND:
+ *				PRINT keyword
+ *
+ *****************************************************************************/
+
+
+PrintStmt: PRINT MODELGRAPH
+{
+	PrintStmt *n=makeNode(PrintStmt);
+	$$ = (Node *)n;
+};
+
+/*****************************************************************************
+ *
+ *		Store COMMAND:
+ *				STORE MODELGRAPH AS modelgraphName WITH FILLING AS fillingname
+ * 				STORE MODELGRAPH AS modelgraphName WITHOUT FILLING
+ *
+ *****************************************************************************/
+
+
+StoreStmt: STORE MODELGRAPH AS ColId WITHOUT FILLING
+{
+	StoreStmt *n=makeNode(StoreStmt);
+	n->name=$4;
+	n->fillingname=NULL;
+	$$ = (Node *)n;
+} 
+| STORE MODELGRAPH AS ColId WITH FILLING AS ColId
+{
+	StoreStmt *n=makeNode(StoreStmt);
+	n->name=$4;
+	n->fillingname=$8;
+	$$ = (Node *)n;
+}
+| STORE FILLING AS ColId
+{
+	StoreStmt *n=makeNode(StoreStmt);
+	n->name=NULL;
+	n->fillingname=$4;
+	$$ = (Node *)n;
+};
+
+
+
+/*****************************************************************************
+ *
+ *		Restore COMMAND:
+ *				RESTORE MODELGRAPH modelgraphName WITH FILLING fillingname
+ * 				RESTORE MODELGRAPH modelgraphName WITHOUT FILLING
+ *
+ *****************************************************************************/
+
+
+RestoreStmt: RESTORE MODELGRAPH ColId WITHOUT FILLING
+{
+	RestoreStmt *n=makeNode(RestoreStmt);
+	n->name=$3;
+	n->fillingname=NULL;
+	$$ = (Node *)n;
+} 
+| RESTORE MODELGRAPH ColId WITH FILLING ColId
+{
+	RestoreStmt *n=makeNode(RestoreStmt);
+	n->name=$3;
+	n->fillingname=$6;
+	$$ = (Node *)n;
+}
+| RESTORE FILLING ColId
+{
+	RestoreStmt *n=makeNode(RestoreStmt);
+	n->name=NULL;
+	n->fillingname=$3;
+	$$ = (Node *)n;
+};
+
+
+
+/*****************************************************************************
+ *
  *		QUERY:
  *				EXPLAIN [ANALYZE] [VERBOSE] query
  *				EXPLAIN ( options ) query
@@ -7896,7 +8004,9 @@ ExplainableStmt:
 			| DeleteStmt
 			| DeclareCursorStmt
 			| CreateAsStmt
-			| ExecuteStmt					/* by default all are $$=$1 */
+			| ExecuteStmt		
+			| CreateModelGraphStmt
+			| CreateModelStmt		/* by default all are $$=$1 */
 		;
 
 explain_option_list:
@@ -8336,10 +8446,11 @@ select_with_parens:
  */
 select_no_parens:
 			simple_select						{ $$ = $1; }
-			| select_clause sort_clause
+			| select_clause sort_clause forecast_clause
 				{
 					insertSelectOptions((SelectStmt *) $1, $2, NIL,
 										NULL, NULL, NULL,
+										$3, NULL,
 										yyscanner);
 					$$ = $1;
 				}
@@ -8348,6 +8459,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $1, $2, $3,
 										list_nth($4, 0), list_nth($4, 1),
 										NULL,
+										NULL,NULL,
 										yyscanner);
 					$$ = $1;
 				}
@@ -8356,6 +8468,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $1, $2, $4,
 										list_nth($3, 0), list_nth($3, 1),
 										NULL,
+										NULL,NULL,
 										yyscanner);
 					$$ = $1;
 				}
@@ -8364,6 +8477,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $2, NULL, NIL,
 										NULL, NULL,
 										$1,
+										NULL,NULL,
 										yyscanner);
 					$$ = $2;
 				}
@@ -8372,6 +8486,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $2, $3, NIL,
 										NULL, NULL,
 										$1,
+										NULL,NULL,
 										yyscanner);
 					$$ = $2;
 				}
@@ -8380,6 +8495,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $2, $3, $4,
 										list_nth($5, 0), list_nth($5, 1),
 										$1,
+										NULL,NULL,
 										yyscanner);
 					$$ = $2;
 				}
@@ -8388,6 +8504,7 @@ select_no_parens:
 					insertSelectOptions((SelectStmt *) $2, $3, $5,
 										list_nth($4, 0), list_nth($4, 1),
 										$1,
+										NULL,NULL,
 										yyscanner);
 					$$ = $2;
 				}
@@ -8794,7 +8911,387 @@ values_clause:
 					$$ = (Node *) n;
 				}
 		;
+/*****************************************************************************
+ *
+ *		QUERY:
+ *
+ *		CREATE MODEL modelname FOR FORECAST OF outputcolumn ON timecolumns
+ *		algorithmclause refreshclause TRAINING_DATA selectstmt storageclause
+ *
+ *****************************************************************************/
+ 
+ CreateModelStmt:
+ 				CREATE MODEL ColId FOR FORECAST OF columnref ON columnref AlgorithmClause opt_storage_clause
+ 					{
+ 						ForecastExpr	*n1 = makeNode(ForecastExpr);
+ 						SelectStmt 		*n2;
+						n1->modelName = $3;
+						n1->measure = $7;
+						n1->time = $9;	
+						n1->length = -2; /*important for detection of CreateModelStmt*/
+						n1->algorithm = (AlgorithmClause *)$10;
+						n1->storeModel = $11;
+						
+						n2 = copyObject(((AlgorithmClause *)$10)->trainingdata);
+						
+						insertSelectOptions(n2, NULL, NIL, NULL, NULL, NULL, 
+											(Node *)n1, NULL,yyscanner);
+						
+						$$ = (Node *) n2;
+ 					}
+ 			;
+ 
+ AlgorithmClause:
+ 				ALGORITHM ColId TRAINING_DATA select_with_parens
+ 					{
+ 						AlgorithmClause *n = makeNode(AlgorithmClause);
+ 						n->algorithmname = $2;
+ 						n->trainingdata = $4;
+ 						$$ = (Node *)n;
+ 					}
+ 				| ALGORITHM ColId PARAMETERS algorithm_parameter_list TRAINING_DATA select_with_parens
+ 					{
+ 						AlgorithmClause *n = makeNode(AlgorithmClause);
+ 						n->algorithmname = $2;
+ 						n->algorithmparameter = $4;
+ 						n->trainingdata = $6;
+ 						$$ = (Node *)n;
+ 					}
+ 			;
+ 				
+algorithm_parameter_list:
+ 				'(' algorithm_parameters ')'						{$$ = $2;}
+ 			;
 
+algorithm_parameter:
+				ColLabel '=' AexprConst
+					{
+						AlgorithmParameter *n = makeNode(AlgorithmParameter);
+						n->key = $1;
+						n->value = (A_Const *)$3;
+						$$ = (Node *)n;
+					}
+			;
+			
+algorithm_parameters:
+				algorithm_parameter									{$$ = list_make1($1);}
+				| algorithm_parameters ',' algorithm_parameter		{$$ = lappend($1,$3);}
+			;
+
+
+/*****************************************************************************
+ *
+ *		FORECAST QUERY:
+ *
+ *		Select_Stmt FORECAST measureColumns ON timeColumns NUMBER numForecastValues algorithmclause storageclause mergeclause
+ *			or
+ *		Select_Stmt FORECAST measureColumns ON timeColumns ASOF targetDate algorithmclause storageclause mergeclause
+ *
+ *****************************************************************************/
+ 
+forecast_clause:
+	DECOMPOSE WINDOW Iconst SEASON Iconst
+		{
+			DecomposeExpr *n = makeNode(DecomposeExpr);
+			n->window = $3;
+			n->season = $5;
+			$$ = (Node *) n;
+		}
+	|
+	opt_forecast_clause opt_on_clause NUMBER Iconst opt_algorithm_clause opt_storage_clause opt_mergeclause
+		{
+			ForecastExpr *n = makeNode(ForecastExpr);
+			n->measure = $1;
+			n->choose = $7;
+			n->time = $2;	
+			n->length = $4;
+			n->algorithm = (AlgorithmClause *)$5;
+			n->storeModel = $6;
+			$$ = (Node *) n;
+		}
+	|
+	opt_forecast_clause opt_on_clause ASOF Sconst opt_algorithm_clause opt_storage_clause opt_mergeclause
+		{
+			ForecastExpr *n = makeNode(ForecastExpr);
+			n->measure = $1;
+			n->choose= $7;
+			n->time = $2;	
+			n->length = -1;
+			n->targetDateString = $4;
+			n->algorithm = (AlgorithmClause *)$5;
+			n->storeModel = $6;
+			$$ = (Node *) n;
+		}
+	;
+	
+	
+opt_mergeclause:
+	CHOOSE FIRST_P
+		{ 
+			$$ = 0;
+		}
+	| CHOOSE LAST_P
+		{
+			$$ = 1;
+		}
+	| CHOOSE AVERAGE
+		{
+			$$ = 2;
+		}
+	| /*EMPTY*/	
+		{
+			$$ = -1
+		}
+	;
+
+
+opt_forecast_clause:
+	FORECAST c_expr
+		{ 
+			$$ = $2;
+		}
+	| /*EMPTY*/								
+		{ 
+			$$ = NULL; 
+		}
+	;
+	
+opt_on_clause:
+	ON c_expr
+		{ 
+			$$ = $2;
+		}
+	| /*EMPTY*/								
+		{ 
+			$$ = NULL; 
+		}
+	;
+	
+opt_algorithm_clause:
+	
+	AlgorithmClause
+	|
+	ALGORITHM ColId
+ 		{
+			AlgorithmClause *n = makeNode(AlgorithmClause);
+			n->algorithmname = $2;
+			$$ = (Node *)n;
+		}
+	| ALGORITHM ColId PARAMETERS algorithm_parameter_list
+				{
+					AlgorithmClause *n = makeNode(AlgorithmClause);
+					n->algorithmname = $2;
+					n->algorithmparameter = $4;
+					$$ = (Node *)n;
+				}
+		;
+	| /*EMPTY*/								
+		{ 
+			AlgorithmClause *n = makeNode(AlgorithmClause);
+			n->algorithmname = NULL;
+			$$ = (Node *)n;
+		}
+	;
+
+	
+opt_storage_clause:
+	STORAGE OFF 								
+		{ 
+			$$ = 1;
+		}
+	| STORAGE STATEMENT
+		{
+			$$ = 2;
+		}
+	| STORAGE TABLE
+		{
+			$$ = 3;
+		}
+	| STORAGE MODELGRAPH
+		{
+			$$ = 4;
+		}
+	| STORAGE MODELINDEX /*was former default*/
+		{
+			$$ = 0;
+		}
+	| FORCE STORAGE STATEMENT
+		{
+			$$ = 12;
+		}
+	| FORCE STORAGE TABLE
+		{
+			$$ = 13;
+		}
+	| FORCE STORAGE MODELGRAPH
+		{
+			$$ = 14;
+		}
+	| FORCE STORAGE MODELINDEX /*was former default*/
+		{
+			$$ = 10;
+		}
+	|/*EMPTY*/								
+		{
+			$$=4;
+		}
+	;
+
+/*****************************************************************************
+ *
+ *		DISAGGREGATION QUERY:
+ *		
+ *		DISAGGREGATE disAggCol FROM selectclause ATTRIBUTES attriblist KEYS keylist STRATEGY strat
+ *
+ *****************************************************************************/
+ 
+DisAggStmt:
+		DISAGGREGATE c_expr FROM select_with_parens ATTRIBUTES '(' where_list ')' KEYS '(' var_list ')' STRATEGY MULT
+			{
+				DisAggExpr *n = makeNode(DisAggExpr);
+				n->targetCol = $2;
+				n->attributes = $7;
+				n->keys = $11;
+				n->strategy = 1;
+				
+				((SelectStmt *)$4)->disAggExpr = (Node *)n;
+				$$ = $4;
+			};
+		
+where_list:
+		where_clause							{ $$ = list_make1($1); }
+		| where_list ',' where_clause 			{ $$ = lappend($1, $3); }
+		;
+		
+/*****************************************************************************
+ *
+ *		CREATE MODELGRAPH QUERY:
+ *		
+ *		CREATE MODELGRAPH attribList fromClause correlationList
+ *
+ *****************************************************************************/
+ 
+ CreateModelGraphStmt:
+ 		CREATE MODELGRAPH graphAttributeList FROM select_with_parens correlationClause
+ 		{
+ 			CreateModelGraphStmt *n = makeNode(CreateModelGraphStmt);
+ 			n->graphAttributeList = $3;
+ 			n->subquery = (Node *)$5;
+ 			n->corrLists = $6;
+ 			
+ 			$$ = (Node *)n;
+ 		};
+ 		
+ graphAttributeList:
+ 		graphAttribute							{$$ = list_make1($1);}
+ 		| graphAttributeList ',' graphAttribute	{$$ = lappend($1, $3);};
+ 		
+ graphAttribute:
+		c_expr
+			{
+				GraphAttribute *ga = palloc(sizeof(GraphAttribute));
+				ga->attributeCol = $1;
+				ga->excludeList = NIL;
+				$$ = ga;
+			}
+		| c_expr EXCLUDING '(' var_list ')'
+			{
+				GraphAttribute *ga = palloc(sizeof(GraphAttribute));
+				ga->attributeCol = $1;
+				ga->excludeList = $4 ;
+				$$ = ga;
+			};
+			
+ correlationClause:
+ 		CORRELATION correlationList					{ $$ = $2; }
+ 		| /*EMPTY*/									{ $$ = NIL; };	
+			
+ correlationList:
+ 		'(' correlation ')'							{$$ = list_make1($2);}
+ 		| correlationList ',' '(' correlation ')'	{$$ = lappend($1, $4);}
+ 		
+ 		
+ correlation: 
+ 		graphAttribute								{$$ = list_make1($1);}
+		| correlation '>' graphAttribute			{$$ = lappend($1,$3);};
+
+ReestimateModelGraphModelsStmt:
+	REESTIMATE
+	{
+		ReestimateModelGraphModelsStmt *n = makeNode(ReestimateModelGraphModelsStmt);
+		
+		$$ = (Node *)n;
+	};
+	
+/*****************************************************************************
+ *
+ *		DROP MODELGRAPH QUERY:
+ *		
+ *		DROP MODELGRAPH
+ *
+ *****************************************************************************/	
+DropModelGraphStmt:
+	DROP MODELGRAPH
+	{
+		DropModelGraphStmt *n = makeNode(DropModelGraphStmt);
+		
+		$$ = (Node *)n;
+	};
+/*****************************************************************************
+ *
+ *		CREATE DISAGGREGATION-SCHEMA QUERY:
+ *		
+ *		CREATE DISAGGSCHEME FOR FORECAST OF outputcolumn ON timecolumns
+ *		whereClause FROM predicates algorithmclause disaggKeyClause
+ *
+ *****************************************************************************/
+
+CreateDisAggSchemeStmt:
+	CREATE DISAGGSCHEME FOR FORECAST OF columnref ON columnref where_clause FROM opt_a_expr opt_algorithm_clause opt_key_clause
+	{
+		CreateDisAggSchemeStmt *n = makeNode(CreateDisAggSchemeStmt);
+		n->target = $9;
+		n->source = $11;
+		n->measure = $6;
+		n->time = $8;	
+		n->algorithm = (AlgorithmClause *)$12;
+		n->disAggKey = (Node *)$13;
+		
+		$$ = (Node *)n;
+	};
+	
+	opt_a_expr:
+		a_expr
+		|/*EMPTY*/									{$$ = NULL;};
+	
+	opt_key_clause:
+		WITH KEY NumericOnly						{$$ = $3;}
+		| /*EMPTY*/									{$$ = NULL;};
+		
+/*****************************************************************************
+ *
+ *		FILL MODELGRAPH QUERY:
+ *		
+ *		FILL MODELGRAPH
+ *
+ *****************************************************************************/
+ 
+ FillModelGraphStmt:
+ 	FILL MODELGRAPH FOR FORECAST OF columnref ON columnref AlgorithmClause fill_method_clause
+ 	{
+ 		FillModelGraphStmt *n = makeNode(FillModelGraphStmt);
+ 		n->measure = $6;
+ 		n->time = $8;
+ 		n->algorithm = (AlgorithmClause *)$9;
+ 		n->fillMethode = $10;
+ 		
+ 		$$ = (Node *)n;
+ 	};
+ 	
+ fill_method_clause:
+ 	METHOD TOPDOWN											{$$ = 0;}
+ 	| METHOD BOTTOMUP										{$$ = 1;}
+	 | METHOD GREEDY										{$$ = 2;};
 
 /*****************************************************************************
  *
@@ -11958,6 +12455,8 @@ unreserved_keyword:
 			| MINUTE_P
 			| MINVALUE
 			| MODE
+			| MODEL
+			| MODELGRAPH
 			| MONTH_P
 			| MOVE
 			| NAME_P
@@ -12577,6 +13076,7 @@ insertSelectOptions(SelectStmt *stmt,
 					List *sortClause, List *lockingClause,
 					Node *limitOffset, Node *limitCount,
 					WithClause *withClause,
+					Node *forecastClause, Node *disAggClause,
 					core_yyscan_t yyscanner)
 {
 	Assert(IsA(stmt, SelectStmt));
@@ -12622,6 +13122,24 @@ insertSelectOptions(SelectStmt *stmt,
 					 errmsg("multiple WITH clauses not allowed"),
 					 parser_errposition(exprLocation((Node *) withClause))));
 		stmt->withClause = withClause;
+	}
+	if (forecastClause)
+	{
+		if (stmt->forecastExpr)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("multiple FORECAST clauses not allowed"),
+					 parser_errposition(exprLocation(forecastClause))));
+		stmt->forecastExpr = forecastClause;
+	}
+	if (disAggClause)
+	{
+		if (stmt->disAggExpr)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("multiple DISAGGREGATE clauses not allowed"),
+					 parser_errposition(exprLocation(forecastClause))));
+		stmt->disAggExpr = disAggClause;
 	}
 }
 

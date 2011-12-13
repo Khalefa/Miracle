@@ -20,9 +20,11 @@
 #ifndef PARSENODES_H
 #define PARSENODES_H
 
+#include "forecast/modelGraph/modelGraphNodes.h"
 #include "nodes/bitmapset.h"
 #include "nodes/primnodes.h"
 #include "nodes/value.h"
+#include "forecast/algorithm.h"
 
 /* Possible sources of a Query */
 typedef enum QuerySource
@@ -569,6 +571,18 @@ typedef struct DefElem
 } DefElem;
 
 /*
+ * AlgorithmClause
+ */
+typedef struct AlgorithmClause
+{
+	NodeTag		type;
+	char		*algorithmname;
+	List		*algorithmparameter;
+	Node		*trainingdata;
+} AlgorithmClause;
+
+
+/*
  * LockingClause - raw representation of FOR UPDATE/SHARE options
  *
  * Note: lockedRels == NIL means "all relations in query".	Otherwise it
@@ -1046,6 +1060,9 @@ typedef struct SelectStmt
 	struct SelectStmt *larg;	/* left child */
 	struct SelectStmt *rarg;	/* right child */
 	/* Eventually add fields for CORRESPONDING spec here */
+	Node 	*forecastExpr;
+
+	Node	*disAggExpr;
 } SelectStmt;
 
 
@@ -1853,6 +1870,29 @@ typedef struct CreateDomainStmt
 	List	   *constraints;	/* constraints (list of Constraint nodes) */
 } CreateDomainStmt;
 
+
+/* ----------------------
+ *		Create Model Statement
+ * ----------------------
+ */
+typedef struct CreateModelStmt
+{
+	NodeTag 			type;
+	char				*modelname;
+	Node				*outputcolumn;
+	List				*timecolumns;
+	AlgorithmClause		*algorithmclause;
+	ModelInfo			*model;
+
+} CreateModelStmt;
+
+typedef struct AlgorithmParameter
+{
+	NodeTag 	type;
+	char		*key;
+	A_Const		*value;
+} AlgorithmParameter;
+
 /* ----------------------
  *		Create Operator Class Statement
  * ----------------------
@@ -2449,6 +2489,30 @@ typedef struct ExplainStmt
 } ExplainStmt;
 
 /* ----------------------
+ *		Print Statement
+ * ----------------------
+ */
+typedef struct PrintStmt
+{
+	NodeTag		type;
+} PrintStmt;
+
+typedef struct StoreStmt
+{
+	NodeTag type;
+	char *name;
+	char* fillingname;
+} StoreStmt;
+
+typedef struct RestoreStmt
+{
+	NodeTag type;
+	char *name;
+	char* fillingname;
+} RestoreStmt;
+
+
+/* ----------------------
  * Checkpoint Statement
  * ----------------------
  */
@@ -2640,5 +2704,123 @@ typedef struct AlterTSConfigurationStmt
 	bool		replace;		/* if true - replace dictionary by another */
 	bool		missing_ok;		/* for DROP - skip error if missing? */
 } AlterTSConfigurationStmt;
+
+typedef struct ForecastExpr
+{
+	NodeTag 		type;
+
+	// the source text of the whole forecast query
+	const char		*sourcetext;
+	
+	// given by user
+	Node			*time;
+	Node			*measure;
+	AlgorithmClause *algorithm;
+	
+	// annotated column types
+	List			*timeCols;
+	List			*measureCols;
+	List			*categoryCols;
+
+	// where conditions of select statement
+	Node			*whereExpr;
+
+	// granularity and aggregation type of the forecast clause
+	short			granularity;
+	Oid				aggType;
+
+	// number of values to forecast
+	int 			length;
+
+	// number of ModelChoose Strategy
+	int 			choose;
+	
+	// date to forecast to
+	char*			targetDateString;
+	
+	//name of the model used to execute the forecast
+	char*			modelName;
+	
+	/* where to store created model; 0: model index (main memory), 1: no storage, 2: hash table(main memory), 3: system table, 4: model graph
+	 * 								10: force to modelindex, 12: force to hash table, 13: force to system able, 14: force to model graph
+	 */
+	short			storeModel;
+} ForecastExpr;
+
+typedef struct DisAggExpr{
+
+	NodeTag 		type;
+
+	// the source text of the whole DisAgg query
+	const char		*sourcetext;
+
+	Node			*targetCol;
+	List			*attributes;
+	List			*keys;
+
+	int				strategy;
+
+} DisAggExpr;
+
+typedef struct CreateModelGraphStmt{
+
+	NodeTag 		type;
+
+	// the source text of the whole CreateModelGraph query
+	const char		*sourcetext;
+
+	Node			*subquery;
+	List			*graphAttributeList;
+	List			*corrLists; //contains lists of correlated columns, lowest element first
+	TupleDesc		tDesc;
+	List			*tupleList;
+} CreateModelGraphStmt;
+
+typedef struct DropModelGraphStmt{
+	NodeTag			type;
+} DropModelGraphStmt;
+
+typedef struct ReestimateModelGraphModelsStmt{
+
+	NodeTag			type;
+} ReestimateModelGraphModelsStmt;
+
+typedef struct CreateDisAggSchemeStmt{
+
+	NodeTag 		type;
+
+	// the source text of the whole CreateDisAggScheme query
+	const char		*sourcetext;
+
+	Node			*target;
+	Node			*source;
+
+	// given by user
+	Node			*time;
+	Node			*measure;
+	AlgorithmClause	*algorithm;
+
+	Node			*disAggKey;
+
+	List			*rTable;
+
+
+} CreateDisAggSchemeStmt;
+
+typedef struct FillModelGraphStmt{
+
+	NodeTag			type;
+
+	// the source text of the whole FillModelGraph query
+	const char		*sourcetext;
+
+	// given by user
+	Node			*time;
+	Node			*measure;
+	AlgorithmClause	*algorithm;
+
+	int				fillMethode;//0:TOPDOWN, 1:BUTTONUP, 2:GREEDY
+} FillModelGraphStmt;
+
 
 #endif   /* PARSENODES_H */

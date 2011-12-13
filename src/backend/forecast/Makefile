@@ -1,19 +1,18 @@
 #-------------------------------------------------------------------------
 #
 # Makefile--
-#    Makefile for backend/nodes
+#    Makefile for backend/executor/forecast
 #
 # IDENTIFICATION
-#    src/backend/nodes/Makefile
+#    $PostgreSQL: pgsql/src/backend/forecast/Makefile$
 #
 #-------------------------------------------------------------------------
 
-subdir = src/backend/nodes
+subdir = src/backend/forecast
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
-OBJS = ArList.o nodeFuncs.o nodes.o list.o bitmapset.o tidbitmap.o \
-       copyfuncs.o equalfuncs.o makefuncs.o pg_list.o \
-       outfuncs.o readfuncs.o print.o read.o params.o value.o
+OBJS = algorithm.o
+SUBDIRS = methods modelindex modelGraph
 
 include $(top_srcdir)/src/backend/common.mk

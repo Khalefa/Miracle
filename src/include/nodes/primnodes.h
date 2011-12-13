@@ -1261,4 +1261,17 @@ typedef struct FromExpr
 	Node	   *quals;			/* qualifiers on join, if any */
 } FromExpr;
 
+
+typedef struct DecomposeExpr
+{
+	NodeTag 		type;
+	
+	int				window;
+	int				season;
+	
+	Node			*model;
+	Node			*targetlist;
+} DecomposeExpr;
+
+
 #endif   /* PRIMNODES_H */
