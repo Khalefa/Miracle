@@ -100,6 +100,7 @@ struct ParseState
 	int			p_next_resno;	/* next targetlist resno to assign */
 	List	   *p_locking_clause;		/* raw FOR UPDATE/FOR SHARE info */
 	Node	   *p_value_substitute;		/* what to replace VALUE with, if any */
+	bool		p_variableparams;
 	bool		p_hasAggs;
 	bool		p_hasWindowFuncs;
 	bool		p_hasSubLinks;

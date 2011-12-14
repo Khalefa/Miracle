@@ -14,6 +14,11 @@
 #ifndef PARSE_CLAUSE_H
 #define PARSE_CLAUSE_H
 
+#define ORDER_CLAUSE 0
+#define GROUP_CLAUSE 1
+#define DISTINCT_ON_CLAUSE 2
+
+
 #include "parser/parse_node.h"
 
 extern void transformFromClause(ParseState *pstate, List *frmList);

@@ -22,6 +22,7 @@
 #include "access/htup.h"
 #include "catalog/genbki.h"
 #include "utils/array.h"
+#include "utils/rel.h"
 
 /* ----------------
  *		pg_parameter definition.	cpp turns this into

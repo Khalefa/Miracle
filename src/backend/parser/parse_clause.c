@@ -40,9 +40,6 @@
 
 
 /* clause types for findTargetlistEntrySQL92 */
-#define ORDER_CLAUSE 0
-#define GROUP_CLAUSE 1
-#define DISTINCT_ON_CLAUSE 2
 
 static const char *const clauseText[] = {
 	"ORDER BY",

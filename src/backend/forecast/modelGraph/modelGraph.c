@@ -26,6 +26,7 @@
 #include "nodes/makefuncs.h"
 #include <time.h>
 #include "parser/parse_coerce.h"
+#include "parser/parse_clause.h"
 #include "utils/guc.h"
 #include "catalog/indexing.h"
 #include "catalog/catalog.h"

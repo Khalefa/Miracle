@@ -19,6 +19,7 @@
 
 #include "forecast/algorithm.h"
 #include "forecast/methods/commonARIMA.h"
+#include "utils/rel.h"
 
 typedef enum gretlLagsDataItems {
 	gretl_Arma_P,
