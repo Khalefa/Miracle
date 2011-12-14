@@ -1009,6 +1009,7 @@ fmgr_security_definer(PG_FUNCTION_ARGS)
  * are allowed to be NULL.	Also, the function cannot be one that needs to
  * look at FmgrInfo, since there won't be any.
  */
+
 Datum
 DirectFunctionCall1Coll(PGFunction func, Oid collation, Datum arg1)
 {

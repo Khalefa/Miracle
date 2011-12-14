@@ -18,7 +18,7 @@
 #include "nodes/bitmapset.h"
 #include "nodes/primnodes.h"
 #include "storage/itemptr.h"
-
+#include "forecast/algorithm.h"
 
 /* ----------------------------------------------------------------
  *						node definitions
@@ -803,5 +803,61 @@ typedef struct PlanInvalItem
 	int			cacheId;		/* a syscache ID, see utils/syscache.h */
 	ItemPointerData tupleId;	/* TID of the object's catalog tuple */
 } PlanInvalItem;
+
+
+typedef struct SingleForecast
+{
+	Plan			plan;
+	
+	int				start;
+	int				end;
+	
+
+	List*			candidatemodelInfos;
+	int				choose;
+	
+	// date to forecast to
+	char			*targetDateString;
+	
+	// the source text of the whole forecast query
+	const char		*sourcetext;
+} SingleForecast;
+
+typedef struct CreateModel
+{
+	Plan			plan;
+
+	int 			start;
+	int				end;
+	ModelInfo		*modelInfo;
+
+	Node			*algorithmStmt;
+
+	char			*sourcetext;
+}CreateForecastModel;
+
+
+typedef struct Decompose
+{
+	Plan			plan;
+	Node			*model;
+	
+	int				window;
+	int				season;
+} Decompose;
+
+typedef struct DisAgg{
+
+	Plan 			plan;
+
+	Node			*targetCol;
+	List			*attributes;
+	List			*keys;
+
+	int				strategy;
+
+	// the source text of the whole disagg query
+	const char		*sourcetext;
+} DisAgg;
 
 #endif   /* PLANNODES_H */

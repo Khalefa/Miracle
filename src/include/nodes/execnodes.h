@@ -18,12 +18,14 @@
 #include "access/heapam.h"
 #include "access/skey.h"
 #include "nodes/params.h"
+#include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 #include "nodes/tidbitmap.h"
 #include "utils/hsearch.h"
 #include "utils/rel.h"
 #include "utils/snapshot.h"
 #include "utils/tuplestore.h"
+#include "forecast/algorithm.h"
 
 
 /* ----------------
@@ -1824,4 +1826,72 @@ typedef struct LimitState
 	TupleTableSlot *subSlot;	/* tuple last obtained from subplan */
 } LimitState;
 
+typedef struct SingleForecastState
+{
+	ScanState			ss;
+	
+	// only one model is build
+	ModelInfo	 		*modelInfo;
+	List				*candidateModels;
+	
+	// other temp information
+	int					current;
+	int					start;
+	// number of values to preocess( OR -2 for CREATE MODEL)
+	int					end;
+	bool				scanDone;
+	int					count;
+	ModelMergeStrategy 	modelMergeStrategy;
+
+	// last seen timestamp
+	int					timestamp;
+	
+	// the source text of the whole forecast query
+	const char			*sourcetext;
+} SingleForecastState;
+
+typedef struct CreateForecastModelState
+{
+	ScanState		ss;
+	ModelInfo		*modelInfo;
+
+	int 			count;
+
+	// last seen timestamp
+	int				timestamp;
+
+	// the source text of the whole forecast query
+	const char		*sourcetext;
+
+	//to store if the model is create explicitly or not
+	bool			implicit;
+} CreateForecastModelState;
+
+
+typedef struct DecomposeState
+{
+	ScanState		ss;
+	Node			*model;
+	bool			scanDone;
+	int				position;
+} DecomposeState;
+
+// has to be here, or in a seperate file, because of cyclic dependencies
+typedef HeapTuple(*DisAggStrategy)(Datum*, bool*, TupleDesc, int, A_Const*);
+
+typedef struct DisAggState{
+
+	ScanState		ss;
+
+	Node			*targetCol;
+	List			*attributes;
+	List			*keys;
+	List			*resultTuples;
+	int				count;
+
+	DisAggStrategy	strategy;
+
+	// the source text of the whole disagg query
+	const char		*sourcetext;
+} DisAggState;
 #endif   /* EXECNODES_H */

@@ -80,6 +80,12 @@ typedef enum NodeTag
 	T_NestLoopParam,
 	T_PlanRowMark,
 	T_PlanInvalItem,
+    /*   */ 
+	T_SingleForecast,
+	T_Decompose,
+	T_CreateForecastModel,
+	T_DisAgg,
+	
 
 	/*
 	 * TAGS FOR PLAN STATE NODES (execnodes.h)
@@ -120,6 +126,22 @@ typedef enum NodeTag
 	T_SetOpState,
 	T_LockRowsState,
 	T_LimitState,
+	/*New nodes */	
+	T_CreateForecastModelState,
+	T_SingleForecastState,
+	T_DecomposeState,
+	T_ModelInfo,
+	T_Model,
+	T_MediumModel,
+	T_RModel,
+	T_LinRegModel,
+	T_AdditiveDec,
+	T_GretlModel,
+	T_ArModel,
+	T_HWModel,
+	T_ARModel,
+	T_DisAggState,
+
 
 	/*
 	 * TAGS FOR PRIMITIVE NODES (primnodes.h)

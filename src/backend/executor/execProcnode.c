@@ -113,6 +113,34 @@
 #include "miscadmin.h"
 
 
+/*
+ * ExecCountSlotsNode - count up the number of tuple table slots needed
+ *
+ * Note that this scans a Plan tree, not a PlanState tree, because we
+ * haven't built the PlanState tree yet ...
+ */
+int
+ExecCountSlotsNode(Plan *node)
+{
+	if (node == NULL)
+		return 0;
+
+	switch (nodeTag(node))
+	{
+		case T_SingleForecast:
+			return ExecCountSlotsSingleForecast((SingleForecast *) node);
+		case T_CreateForecastModel:
+			return ExecCountSlotsCreateModel((CreateForecastModel *) node);
+		case T_Decompose:
+			return ExecCountSlotsDecompose((Decompose *) node);
+		case T_DisAgg:
+			return ExecCountSlotsDisAgg((DisAgg *) node);
+
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
+			break;
+	}
+}
 /* ------------------------------------------------------------------------
  *		ExecInitNode
  *

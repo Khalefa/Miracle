@@ -425,6 +425,18 @@ int			log_min_duration_statement = -1;
 int			log_temp_files = -1;
 int			trace_recovery_messages = LOG;
 
+int			mmstrat = 0;
+double optim_term_maxtime=1.0;
+double optim_term_ftol_abs=0;
+double optim_term_xtol_abs=0;
+double optim_term_ftol_rel=0;
+double optim_term_xtol_rel=0;
+int optim_term_maxeval=-1;
+int optim_method_general=7;
+int modelgraph_with_ids=0;
+int optim_method_local=6;
+
+
 int			num_temp_buffers = 1024;
 
 char	   *data_directory;
@@ -440,6 +452,11 @@ char	   *application_name;
 int			tcp_keepalives_idle;
 int			tcp_keepalives_interval;
 int			tcp_keepalives_count;
+
+double		alpha;
+double		trainingDataPercentage;
+int			sdf;
+int			printDbg;
 
 /*
  * These variables are all dummies that don't do anything, except in some

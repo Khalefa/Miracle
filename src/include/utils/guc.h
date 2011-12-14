@@ -223,6 +223,23 @@ extern int	tcp_keepalives_idle;
 extern int	tcp_keepalives_interval;
 extern int	tcp_keepalives_count;
 
+extern bool	allow_ModelGraph_create;
+extern int	mmstrat;
+extern double optim_term_maxtime;
+extern double optim_term_ftol_abs;
+extern double optim_term_ftol_rel;
+extern double optim_term_xtol_rel;
+extern double optim_term_xtol_abs;
+extern int optim_term_maxeval;
+extern int optim_method_general;
+extern int modelgraph_with_ids;
+extern int optim_method_local;
+
+extern double 	alpha;
+extern double 	trainingDataPercentage;
+extern int		sdf;
+extern int		printDbg;
+
 /*
  * Functions exported by guc.c
  */

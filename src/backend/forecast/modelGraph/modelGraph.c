@@ -4,7 +4,6 @@
  *  Created on: 01.03.2011
  *      Author: b1anchi
  */
-
 #include "forecast/methods/armodel.h"
 #include "forecast/modelGraph/modelGraph.h"
 #include "forecast/modelGraph/modelGraphReceiver.h"
@@ -288,6 +287,7 @@ determineWhichNodeToUse(Node **whereExpr, TargetEntry *tle, List *rTable) {
 		//we found a matching TargetEntry
 
 		result = ((Const *)lfirst(list_tail(((OpExpr *)*whereExpr)->args)))->constvalue;
+
 		*whereExpr = NULL;
 		return  result;
 	}
@@ -555,6 +555,7 @@ transformGraphAttribute(GraphAttribute *gAtt, ParseState *pstate, List *teList) 
 //TODO: maybe here we need the targetList of the executed Query from transformCreateModelGraphStmt, because the columns of the TargetEntries don't fit
 	attCol = findTargetlistEntry(pstate, (Node *)attCol, &teList, ORDER_CLAUSE);
 	rte = (RangeTblEntry *)list_nth(pstate->p_rtable, ((Var *)attCol->expr)->varno-1);
+
 
 	//forward the ColumnName an the RelationOid, so we don`t need any other structures later(it's not done automatically!)
 	attCol->resname = palloc0((strlen(colName)+1)*sizeof(char));

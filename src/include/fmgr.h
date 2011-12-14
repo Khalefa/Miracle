@@ -116,6 +116,15 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
 		(Fcinfo).nargs = (Nargs); \
 	} while (0)
 
+#define InitFunctionCallInfoDataOld(Fcinfo, Flinfo, Nargs, Context, Resultinfo) \
+	do { \
+		(Fcinfo).flinfo = (Flinfo); \
+		(Fcinfo).context = (Context); \
+		(Fcinfo).resultinfo = (Resultinfo); \
+		(Fcinfo).isnull = false; \
+		(Fcinfo).nargs = (Nargs); \
+	} while (0)
+
 /*
  * This macro invokes a function given a filled-in FunctionCallInfoData
  * struct.	The macro result is the returned Datum --- but note that
@@ -432,6 +441,8 @@ extern int no_such_variable
  * directly-computed parameter list.  Note that neither arguments nor result
  * are allowed to be NULL.
  */
+//extern Datum DirectFunctionCall1(PGFunction func, Datum arg1);
+//extern Datum DirectFunctionCall2(PGFunction func, Datum arg1, Datum arg2);
 extern Datum DirectFunctionCall1Coll(PGFunction func, Oid collation,
 						Datum arg1);
 extern Datum DirectFunctionCall2Coll(PGFunction func, Oid collation,

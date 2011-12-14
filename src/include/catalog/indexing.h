@@ -300,6 +300,28 @@ DECLARE_UNIQUE_INDEX(pg_extension_oid_index, 3080, on pg_extension using btree(o
 DECLARE_UNIQUE_INDEX(pg_extension_name_index, 3081, on pg_extension using btree(extname name_ops));
 #define ExtensionNameIndexId 3081
 
+
+DECLARE_UNIQUE_INDEX(pg_model_oid_index, 6500, on pg_model using btree(oid oid_ops));
+#define ModelOidIndexId  6500
+
+DECLARE_UNIQUE_INDEX(pg_parameter_oid_index, 6501, on pg_parameter using btree(oid oid_ops));
+#define ParameterOidIndexId  6501
+
+DECLARE_INDEX(pg_parameter_model_oid_index, 6502, on pg_parameter using btree(model oid_ops));
+#define ParameterModelOidIndexId  6502
+
+DECLARE_UNIQUE_INDEX(pg_model_name_index,6503, on pg_model using btree(name name_ops));
+#define ModelNameIndexId 6503
+
+
+
+DECLARE_UNIQUE_INDEX(pg_fcalg_oid_index,6504, on pg_fcalg using btree(oid oid_ops));
+#define FcalgAlgOidIndexId 6504
+
+DECLARE_UNIQUE_INDEX(pg_fcalg_algname_index,6505, on pg_fcalg using btree(algName name_ops));
+#define FcalgAlgNameIndexId 6505
+
+
 /* last step of initialization script: build the indexes declared above */
 BUILD_INDICES
 
