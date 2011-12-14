@@ -139,6 +139,9 @@ typedef struct TupleTableSlot
 	((slot) == NULL || (slot)->tts_isempty)
 
 /* in executor/execTuples.c */
+extern TupleTable ExecCreateTupleTable(int tableSize);
+extern void ExecDropTupleTable(TupleTable table, bool shouldFree);
+
 extern TupleTableSlot *MakeTupleTableSlot(void);
 extern TupleTableSlot *ExecAllocTableSlot(List **tupleTable);
 extern void ExecResetTupleTable(List *tupleTable, bool shouldFree);

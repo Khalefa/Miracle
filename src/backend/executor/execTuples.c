@@ -105,6 +105,57 @@ static TupleDesc ExecTypeFromTLInternal(List *targetList,
  *				  tuple table create/delete functions
  * ----------------------------------------------------------------
  */
+/* --------------------------------
+ *		ExecCreateTupleTable
+ *
+ *		This creates a new tuple table of the specified size.
+ *
+ *		This should be used by InitPlan() to allocate the table.
+ *		The table's address will be stored in the EState structure.
+ * --------------------------------
+ */
+TupleTable
+ExecCreateTupleTable(int tableSize)
+{
+	TupleTable	newtable;
+	int			i;
+
+	/*
+	 * sanity checks
+	 */
+	Assert(tableSize >= 1);
+
+	/*
+	 * allocate the table itself
+	 */
+	newtable = (TupleTable) palloc(sizeof(TupleTableData) +
+								   (tableSize - 1) *sizeof(TupleTableSlot));
+	newtable->size = tableSize;
+	newtable->next = 0;
+
+	/*
+	 * initialize all the slots to empty states
+	 */
+	for (i = 0; i < tableSize; i++)
+	{
+		TupleTableSlot *slot = &(newtable->array[i]);
+
+		slot->type = T_TupleTableSlot;
+		slot->tts_isempty = true;
+		slot->tts_shouldFree = false;
+		slot->tts_shouldFreeMin = false;
+		slot->tts_tuple = NULL;
+		slot->tts_tupleDescriptor = NULL;
+		slot->tts_mcxt = CurrentMemoryContext;
+		slot->tts_buffer = InvalidBuffer;
+		slot->tts_nvalid = 0;
+		slot->tts_values = NULL;
+		slot->tts_isnull = NULL;
+		slot->tts_mintuple = NULL;
+	}
+
+	return newtable;
+}
 
 /* --------------------------------
  *		MakeTupleTableSlot

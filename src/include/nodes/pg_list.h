@@ -217,6 +217,7 @@ extern bool list_member_oid(List *list, Oid datum);
 
 extern List *list_delete(List *list, void *datum);
 extern List *list_delete_ptr(List *list, void *datum);
+List *list_delete_ptr_wf(List *list, void *datum);
 extern List *list_delete_int(List *list, int datum);
 extern List *list_delete_oid(List *list, Oid datum);
 extern List *list_delete_first(List *list);
@@ -324,4 +325,9 @@ void pglist_print2(const char * name, List *l);
 extern int	length(List *list);
 #endif   /* ENABLE_LIST_COMPAT */
 
+List *
+list_delete_cell_wf(List *list, ListCell *cell, ListCell *prev);
+
+List *
+list_delete_first_wf(List *list);
 #endif   /* PG_LIST_H */

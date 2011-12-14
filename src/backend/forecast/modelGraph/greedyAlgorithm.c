@@ -178,7 +178,7 @@ FillWorkloadElementWithValuesAndModelInfo(FillModelGraphStmt *stmt, WorkloadElem
 	tle = (TargetEntry *)stmt->measure;
 	colName = ((Value *)lfirst(list_tail(((ColumnRef *)stmt->measure)->fields)))->val.str;
 	//find the TargetEntry that fits the actual graphAttribute
-	tle = findTargetlistEntry(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
+	tle = findTargetlistEntrySQL92(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
 
 	if(!IsA(tle->expr, Aggref))//it is a TargetEntry
 		elog(ERROR,"Meassurecolumn must be aggregated");
@@ -268,7 +268,7 @@ FillWorkloadElementWithValuesAndModelInfo(FillModelGraphStmt *stmt, WorkloadElem
 	tle = (TargetEntry *)stmt->time;
 	colName = ((Value *)lfirst(list_tail(((ColumnRef *)stmt->time)->fields)))->val.str;
 	//find the TargetEntry that fits the actual graphAttribute
-	tle = findTargetlistEntry(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
+	tle = findTargetlistEntrySQL92(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
 
 	if(!IsA(tle->expr, Aggref))//it is a TargetEntry
 		v = (Var *)tle->expr;

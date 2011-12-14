@@ -554,7 +554,7 @@ transformGraphAttribute(GraphAttribute *gAtt, ParseState *pstate, List *teList) 
 	//find the TargetEntry that fits the actual graphAttribute
 
 //TODO: maybe here we need the targetList of the executed Query from transformCreateModelGraphStmt, because the columns of the TargetEntries don't fit
-	attCol = findTargetlistEntry(pstate, (Node *)attCol, &teList, ORDER_CLAUSE);
+	attCol = findTargetlistEntrySQL92(pstate, (Node *)attCol, &teList, ORDER_CLAUSE);
 	rte = (RangeTblEntry *)list_nth(pstate->p_rtable, ((Var *)attCol->expr)->varno-1);
 
 

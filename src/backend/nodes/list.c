@@ -608,6 +608,29 @@ list_delete_ptr(List *list, void *datum)
 	return list;
 }
 
+/* As above, but without pfree */
+List *
+list_delete_ptr_wf(List *list, void *datum)
+{
+	ListCell   *cell;
+	ListCell   *prev;
+
+	Assert(IsPointerList(list));
+	check_list_invariants(list);
+
+	prev = NULL;
+	foreach(cell, list)
+	{
+		if (lfirst(cell) == datum)
+			return list_delete_cell_wf(list, cell, prev);
+
+		prev = cell;
+	}
+
+	/* Didn't find a match: return the list unmodified */
+	return list;
+}
+
 /* As above, but for integers */
 List *
 list_delete_int(List *list, int datum)
@@ -1271,3 +1294,49 @@ length(List *list)
 {
 	return list_length(list);
 }
+
+List *
+list_delete_cell_wf(List *list, ListCell *cell, ListCell *prev)
+{
+	check_list_invariants(list);
+	Assert(prev != NULL ? lnext(prev) == cell : list_head(list) == cell);
+
+	/*
+	 * If we're about to delete the last node from the list, free the whole
+	 * list instead and return NIL, which is the only valid representation of
+	 * a zero-length list.
+	 */
+	if (list->length == 1)
+	{
+		return NIL;
+	}
+
+	/*
+	 * Otherwise, adjust the necessary list links, deallocate the particular
+	 * node we have just removed, and return the list we were given.
+	 */
+	list->length--;
+
+	if (prev)
+		prev->next = cell->next;
+	else
+		list->head = cell->next;
+
+	if (list->tail == cell)
+		list->tail = prev;
+
+
+	return list;
+}
+
+List *
+list_delete_first_wf(List *list)
+{
+	check_list_invariants(list);
+
+	if (list == NIL)
+		return NIL;				/* would an error be better? */
+
+	return list_delete_cell_wf(list, list_head(list), NULL);
+}
+

@@ -39,7 +39,7 @@
 #include "postgres.h"
 
 #include "utils/datum.h"
-
+#include "utils/builtins.h"
 
 /*-------------------------------------------------------------------------
  * datumGetSize
@@ -206,3 +206,38 @@ datumIsEqual(Datum value1, Datum value2, bool typByVal, int typLen)
 	}
 	return res;
 }
+
+bool
+compareDatum(Datum value1, Datum value2, Oid typeOid){
+
+	bool res = false;
+
+	switch(typeOid){
+	case 20:
+	case 21:
+	case 23:
+	{
+		res = datumIsEqual(value1, value2, true, (typeOid==20)? 8 : ((typeOid==21)? 2 : 4));
+		return res;
+	}
+	case 700:
+	case 701:
+	{
+		res = datumIsEqual(value1, value2, false, (typeOid==700)? 4 : 8 );
+		return res;
+	}
+	case 1042:
+	{
+		res = DirectFunctionCall2(bpchareq, value1, value2);
+		return res;
+	}
+	case 1043:
+	{
+		res = DirectFunctionCall2(texteq, value1, value2);
+		return res;
+	}
+	default:
+		return false;
+	}
+}
+
