@@ -73,7 +73,7 @@ static Node *buildMergedJoinVar(ParseState *pstate, JoinType jointype,
 				   Var *l_colvar, Var *r_colvar);
 static void checkExprIsVarFree(ParseState *pstate, Node *n,
 				   const char *constructName);
-static TargetEntry *findTargetlistEntrySQL92(ParseState *pstate, Node *node,
+TargetEntry *findTargetlistEntrySQL92(ParseState *pstate, Node *node,
 						 List **tlist, int clause);
 static TargetEntry *findTargetlistEntrySQL99(ParseState *pstate, Node *node,
 						 List **tlist);
@@ -1269,7 +1269,7 @@ checkExprIsVarFree(ParseState *pstate, Node *n, const char *constructName)
  * tlist	the target list (passed by reference so we can append to it)
  * clause	identifies clause type being processed
  */
-static TargetEntry *
+TargetEntry *
 findTargetlistEntrySQL92(ParseState *pstate, Node *node, List **tlist,
 						 int clause)
 {

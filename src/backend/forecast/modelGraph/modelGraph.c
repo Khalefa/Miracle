@@ -31,6 +31,7 @@
 #include "catalog/indexing.h"
 #include "catalog/catalog.h"
 #include <inttypes.h>
+#include "executor/functions.h"
 
 ModelGraphIndexNode *modelGraphRoot = NULL;
 ModelGraphIndex *modelGraphIdx = NULL;
@@ -66,18 +67,58 @@ char *getTrainingDataQuery(void){
 	return trainingSourceTextFromFill;
 }
 
+
+/*
+ * Parser setup hook for parsing a SQL function body.
+ */
+
+
+
+
 void runQuery(char* queryString,char* tag)
 {
 	List			*query_list = NIL,
 	                *planned_list = NIL;
 	const char		*commandTag;
 	Portal			portal;
+	List	   *raw_parsetree_list;
+	List	   *queryTree_list;
+ 	List	   *flat_query_list;
+	ListCell   *lc;
 
 	// create command Tag
 	commandTag = tag;
 
 	//  plan the query
-	query_list =pg_parse_and_rewrite(queryString,NULL,0);
+	/*
+	 * Parse and rewrite the queries in the function text.	Use sublists to
+	 * keep track of the original query boundaries.  But we also build a
+	 * "flat" list of the rewritten queries to pass to check_sql_fn_retval.
+	 * This is because the last canSetTag query determines the result type
+	 * independently of query boundaries --- and it might not be in the last
+	 * sublist, for example if the last query rewrites to DO INSTEAD NOTHING.
+	 * (It might not be unreasonable to throw an error in such a case, but
+	 * this is the historical behavior and it doesn't seem worth changing.)
+	 */
+	raw_parsetree_list = pg_parse_query(queryString);
+
+	queryTree_list = NIL;
+	flat_query_list = NIL;
+	foreach(lc, raw_parsetree_list)
+	{
+		Node	   *parsetree = (Node *) lfirst(lc);
+		List	   *queryTree_sublist;
+
+		queryTree_sublist = pg_analyze_and_rewrite_params(parsetree,
+														  queryString,
+									   (ParserSetupHook) sql_fn_parser_setup,
+														  NULL);
+		queryTree_list = lappend(queryTree_list, queryTree_sublist);
+		flat_query_list = list_concat(flat_query_list,
+									  list_copy(queryTree_sublist));
+	}
+
+	//query_list =pg_parse_and_rewrite(queryString,NULL,0);
 	planned_list = pg_plan_queries(query_list, 0, NULL);
 
 	// Create a new portal to run the query in

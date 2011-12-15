@@ -64,8 +64,8 @@ CreateForecastModelState *ExecInitCreateForecastModel(CreateForecastModel *node,
 		/* Slots for the main plan tree */
 		nSlots += ExecCountSlotsNode(outerPlan);
 		/* Add slots for subplans and initplans */
-		ExecDropTupleTable(estate->es_tupleTable, true);
-		estate->es_tupleTable = ExecCreateTupleTable(nSlots);
+		ExecResetTupleTable(estate->es_tupleTable, true);
+		estate->es_tupleTable = NIL;
 		innerPlanState(createState) = ExecInitNode(outerPlan, estate, eflags);
 	}
 	outerPlanState(createState) = ExecInitNode(outerPlan, estate, eflags);

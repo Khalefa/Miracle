@@ -56,6 +56,7 @@
 #include "parser/parser.h"
 #include "rewrite/rewriteManip.h"
 #include "storage/lock.h"
+#include "forecast/modelGraph/modelGraph.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -2685,6 +2686,212 @@ transformCreateSchemaStmt(CreateSchemaStmt *stmt)
 	result = list_concat(result, cxt.grants);
 
 	return result;
+}
+/*
+ * transformCreateModelStmt -
+ *	  analyzes and transforms the CreateModelStmt
+ *	  it returns the appropiate ModelInfo to create the Model
+ *
+ */
+CreateModelStmt *
+transformCreateModelStmt(CreateModelStmt *stmt,const char *queryString)
+{
+	Query			*query;
+	TargetEntry		*output;
+	ListCell		*elem;
+	List			*timeColumns;
+
+	query = parse_analyze(stmt->algorithmclause->trainingdata,queryString,NULL,0);
+	stmt->algorithmclause->trainingdata = (Node *) query;
+
+	/*
+	 * transform outputcolumn and time column to TargetEntry
+	 */
+	output = findTargetlistEntrySQL92(NULL,stmt->outputcolumn,&(query->targetList),ORDER_CLAUSE);
+	stmt->outputcolumn = (Node *)output;
+
+	/*
+	 * transform List of time Columns
+	 */
+	elem = list_head(stmt->timecolumns);
+	timeColumns = list_make1(findTargetlistEntrySQL92(NULL,(Node *) lfirst(elem),&(query->targetList),ORDER_CLAUSE));
+
+	for_each_cell(elem,elem->next) {
+		lappend(timeColumns,findTargetlistEntrySQL92(NULL,(Node *) lfirst(elem),&(query->targetList),ORDER_CLAUSE));
+	}
+
+	stmt->timecolumns = timeColumns;
+
+	return stmt;
+}
+
+CreateModelGraphStmt *
+transformCreateModelGraphStmt(CreateModelGraphStmt *stmt, const char *queryString, char *completionTag){
+
+	ListCell		*lc1,
+					*lc2,
+					*lc3;
+	ColumnRef		*attCRef,
+					*corrCRef;
+	bool			cRefEq;
+	List			*helpList = NIL,
+					*helpList2 = NIL,
+					*cRefDelList = NIL;
+
+	ParseState 		*pstate = make_parsestate(NULL);
+	pstate->p_sourcetext = queryString;
+	pstate->p_variableparams = false;
+
+	stmt->sourcetext = queryString;
+
+	stmt->subquery = (Node*)transformStmt(pstate, stmt->subquery);
+
+	GetTuplesFromSubquery(stmt, completionTag);
+
+	//throw all the GraphAttributes which are present in any correlation out of the graphAttributeList
+	foreach(lc1, stmt->graphAttributeList){ //foreach graphAttribute
+
+		attCRef = (ColumnRef *)((GraphAttribute *)lfirst(lc1))->attributeCol;
+
+		//check for attCRef if its present in a correlation
+		foreach(lc2, stmt->corrLists){//for each correlation
+			foreach(lc3, (List *)lfirst(lc2)){//foreach attributeCol of the current correlation
+				corrCRef = (ColumnRef *)((GraphAttribute *)lfirst(lc3))->attributeCol;
+
+				//if the ColumnRefs are equal remember this...
+				if(equal(attCRef, corrCRef)){
+					cRefEq = true;
+					//...and forward  the in-/excludeLists, because we need them to build the hierarchy properly
+					((GraphAttribute *)lfirst(lc3))->excludeList = ((GraphAttribute *)lfirst(lc1))->excludeList;
+					cRefDelList = lappend(cRefDelList, lfirst(lc1));
+					break;
+				}
+			}
+			if(cRefEq)
+				break;
+		}
+	}
+
+	//remove all remembered ColumnRefs
+	foreach(lc1, cRefDelList){
+		stmt->graphAttributeList = list_delete(stmt->graphAttributeList, lfirst(lc1));
+	}
+
+	//transform all ColumnRefs of ALL correlations' GraphAttributes to TargetEntries
+	foreach(lc1, stmt->corrLists){//iterate all correlations
+
+		helpList = NIL;
+		foreach(lc2, (List *)lfirst(lc1)){//iterate all GraphAttributes in the correlation
+
+			transformGraphAttribute((GraphAttribute *)lfirst(lc2), pstate, ((Query *)stmt->subquery)->targetList);
+		}
+	}
+
+	// transform each ColumnRef of the GraphAttributeList to a TargetEntry
+	helpList2 = NIL;
+	foreach(lc1, stmt->graphAttributeList){
+
+		transformGraphAttribute((GraphAttribute *)lfirst(lc1), pstate, ((Query *)stmt->subquery)->targetList);
+	}
+
+	return stmt;
+}
+
+CreateDisAggSchemeStmt *
+transformCreateDisAggSchemeStmt(CreateDisAggSchemeStmt *stmt, const char *queryString, char *completionTag){
+
+	char 				*masterQuery;
+	List 				*parsetree_list = NIL,
+						*query_list = NIL,
+						*rTable = NIL,
+						*tleDummyList = NIL;
+	char				*colName;
+	TargetEntry			*tle;
+	RangeTblEntry		*rte;
+	ParseState 			*pstate = make_parsestate(NULL);
+	Var					*v;
+	Query				*query;
+	pstate->p_sourcetext = queryString;
+	pstate->p_variableparams = false;
+
+	if(!isModelGraphExistent())
+			elog(ERROR, "There is no Modelgraph to store the DisAggScheme, you have to create one first!");
+	masterQuery = getSourceText();
+	stmt->sourcetext = queryString;
+
+	if(stmt->algorithm->trainingdata){
+		query = (Query*)stmt->algorithm->trainingdata;
+	}else{
+		parsetree_list = pg_parse_query((const char*)masterQuery);
+
+		query_list = pg_analyze_and_rewrite((Node *)lfirst(list_head(parsetree_list)), masterQuery, NULL, 0);
+
+		query = (Query *)linitial(query_list);
+	}
+
+	rTable = query->rtable;
+	tleDummyList = query->targetList;
+
+	stmt->rTable = rTable;
+
+	//for ColumnRefs with prepended table
+	pstate->p_relnamespace = rTable;
+	//for ColumnRefs without prepended table
+	pstate->p_varnamespace = rTable;
+	//to obtain RTEs
+	pstate->p_rtable = rTable;
+
+
+	stmt->source = transformExpr(pstate, stmt->source);
+	stmt->target = transformExpr(pstate, stmt->target);
+
+	//transform measure to TargetEntry
+	//at this point these are still ColumnRefs!, but handling as TargetEntry saves some ugly casting
+	tle = (TargetEntry *)stmt->measure;
+
+	
+
+	colName = ((Value *)lfirst(list_tail(((ColumnRef *)stmt->measure)->fields)))->val.str;
+	//find the TargetEntry that fits the actual graphAttribute
+	tle = findTargetlistEntrySQL92(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
+	
+	if(!IsA(tle->expr, Aggref))//it is a TargetEntry
+		v=(Var*)tle->expr;
+	else //Aggref case
+		v = (Var *)lfirst(list_head(((Aggref *)tle->expr)->args));
+	rte = (RangeTblEntry *)list_nth(pstate->p_rtable, v->varno-1);
+	//forward the ColumnName an the RelationOid, so we don`t need any other structures later(it's not done automatically!)
+	tle->resname = colName;
+	tle->resorigtbl = rte->relid;
+
+	stmt->measure = (Node *)tle;
+
+
+	//transform time to TargetEntry
+	//at this point these are still ColumnRefs!, but handling as TargetEntry saves some ugly casting
+	tle = (TargetEntry *)stmt->time;
+	colName = ((Value *)lfirst(list_tail(((ColumnRef *)stmt->time)->fields)))->val.str;
+	//find the TargetEntry that fits the actual graphAttribute
+	tle = findTargetlistEntrySQL92(pstate, (Node *)tle, &tleDummyList, ORDER_CLAUSE);
+	rte = (RangeTblEntry *)list_nth(pstate->p_rtable, ((Var *)tle->expr)->varno-1);
+	//forward the ColumnName an the RelationOid, so we don`t need any other structures later(it's not done automatically!)
+	tle->resname = colName;
+	tle->resorigtbl = rte->relid;
+
+	stmt->time = (Node *)tle;
+
+	list_free_deep(parsetree_list);
+	list_free_deep(query_list);
+
+	return stmt;
+}
+
+void
+transformFillModelGraphStmt(FillModelGraphStmt *stmt, const char *queryString, char *completionTag){
+
+	stmt->sourcetext = queryString;
+
+	//here is nothing else to do, because everything needed to transform anything is done later automatically, so steal it there ;)
 }
 
 /*

@@ -24,5 +24,10 @@ extern IndexStmt *transformIndexStmt(IndexStmt *stmt, const char *queryString);
 extern void transformRuleStmt(RuleStmt *stmt, const char *queryString,
 				  List **actions, Node **whereClause);
 extern List *transformCreateSchemaStmt(CreateSchemaStmt *stmt);
+extern CreateModelStmt *transformCreateModelStmt(CreateModelStmt *stmt,const char *queryString);
+extern CreateModelGraphStmt *transformCreateModelGraphStmt(CreateModelGraphStmt *stmt,const char *queryString, char *completionTag);
+extern CreateDisAggSchemeStmt *transformCreateDisAggSchemeStmt(CreateDisAggSchemeStmt *stmt, const char *queryString, char *completionTag);
+extern void transformFillModelGraphStmt(FillModelGraphStmt *stmt, const char *queryString, char *completionTag);
+
 
 #endif   /* PARSE_UTILCMD_H */
